@@ -285,3 +285,28 @@ h1,.screen-title,.culprit-card strong,.news-body > strong,.news-body a { word-br
 /* 말풍선은 위쪽으로: 아래쪽 물은 물고기와 고래 자리 */
 .speech { top: 66px; bottom: auto; }
 @media (max-width: 520px) { .speech { top: 54px; bottom: auto; } }
+
+/* ---------- 섬 장면 ---------- */
+.pori-island { position: absolute; z-index: 1; inset: 0; cursor: grab; touch-action: pan-y; }
+.pori-island.dragging { cursor: grabbing; }
+.pori-stage.island { background: #cfe8ee; }
+.pori-stage.island.closed::before { content: none; }
+.speech-place { margin-top: 3px; color: #2f8f78; font-size: 12px; font-weight: 750; }
+.island-layout { grid-template-columns: 1fr; gap: 22px; align-items: start; }
+.island-layout .pori-stage { order: -1; min-height: min(640px, 72vh); border-radius: 36px; }
+.island-layout .intro { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; padding: 0; }
+.island-layout .intro .eyebrow,.island-layout .intro h1,.island-layout .intro .description { display: none; }
+.island-layout .intro > * { max-width: none; margin-top: 0; }
+.island-layout .source-row { flex-direction: column; align-items: flex-start; justify-content: center; }
+@media (max-width: 520px) {
+  .island-layout .pori-stage { min-height: 480px; }
+}
+@media (max-width: 520px) {
+  /* 섬에서는 위쪽이 등대 자리라 말풍선을 아래 물 위로 */
+  .pori-stage.island .speech { top: auto; bottom: 12px; }
+  .pori-stage.island .scene-info { bottom: 12px; }
+}
+@media (min-width: 521px) {
+  /* 넓은 섬 화면에서는 설명 카드를 왼쪽 아래에 좁게: 가운데는 카메라가 다가간 대상 자리 */
+  .pori-stage.island .scene-info { right: auto; width: min(400px, calc(100% - 40px)); }
+}

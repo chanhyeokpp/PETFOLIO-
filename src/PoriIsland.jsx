@@ -1,0 +1,886 @@
+import { useEffect, useRef } from 'react'
+import * as THREE from 'three'
+import {
+  COLORS, POSES, WEATHER, waveHeight,
+  buildBoat, buildFish, buildPori, buildWeather, buildWhale, buildZzz,
+} from './Pori3D'
+
+// Pori's island: a small diorama floating in the market sea, seen from above at an angle.
+// The same signals as the side-view scene, but every feature has a place on the island,
+// and Pori walks to the place where today's story is.
+
+const damp = (current, target, lambda, dt) => THREE.MathUtils.damp(current, target, lambda, dt)
+const dampAngle = (current, target, lambda, dt) => {
+  const diff = Math.atan2(Math.sin(target - current), Math.cos(target - current))
+  return current + diff * (1 - Math.exp(-lambda * dt))
+}
+
+const GROUND_Y = 0.42 // top of the grass
+const PORI_SCALE = 0.42
+const WALK_SPEED = 1.1
+const SEA_LOW = -0.1 // quiet day: the beach is dry
+const SEA_HIGH = 0.3 // busy day: the tide covers the beach
+
+// Where Pori stands for each story. face = which way Pori looks once there (0 = toward the front).
+const SPOTS = {
+  shore: { x: 0.35, z: 2.1, face: 0.15, name: '물가' },
+  dock: { x: 2.7, z: 0.95, face: Math.PI / 2, name: '선착장' },
+  lighthouse: { x: -0.95, z: 0.45, face: -0.35, name: '등대' },
+  home: { x: 1.3, z: -0.45, face: 0.1, name: '포리 집' },
+}
+
+const PALETTE = {
+  grass: '#b4e39a',
+  hill: '#9fd68a',
+  rock: '#9c929b',
+  sand: '#f4e0b5',
+  path: '#fbf0d9',
+  wood: '#cf9f6e',
+  post: '#9b7350',
+  stripe: '#ff9b85',
+  roof: '#7fd6c0',
+  leaf: '#7fcf8e',
+  trunk: '#a9805a',
+  daySky: '#cfe8ee',
+  nightSky: '#27325e',
+  daySea: '#86cfdc',
+  nightSea: '#3d5791',
+}
+
+const HOTSPOTS = [
+  { key: 'pori', label: '포리 쓰다듬기', size: 72 },
+  { key: 'lighthouse', label: '등대: 외해(간밤 미국 증시)와 바람 보기', size: 84 },
+  { key: 'home', label: '포리 집 보기', size: 84 },
+  { key: 'weather', label: '날씨: 간밤 미국 증시 보기', size: 88 },
+  { key: 'foreign', label: '외국인 배 보기', size: 70 },
+  { key: 'institution', label: '기관 배 보기', size: 70 },
+  { key: 'samsung', label: '파란 고래: 삼성전자 보기', size: 66 },
+  { key: 'hynix', label: '주황 고래: SK하이닉스 보기', size: 66 },
+  { key: 'fish0', label: '물고기 1: 오늘의 화제 종목 보기', size: 54 },
+  { key: 'fish1', label: '물고기 2: 오늘의 화제 종목 보기', size: 54 },
+  { key: 'fish2', label: '물고기 3: 오늘의 화제 종목 보기', size: 54 },
+]
+
+const standard = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, ...extra })
+const shadowed = (mesh, cast = true) => {
+  mesh.castShadow = cast
+  mesh.receiveShadow = true
+  return mesh
+}
+
+// A soft, irregular outline (x, z points) for one terrace of the island.
+function outline(radius, wobble, seed, cx = 0, cz = 0, count = 14) {
+  const points = []
+  for (let i = 0; i < count; i += 1) {
+    const angle = (i / count) * Math.PI * 2
+    const r = radius * (1 + wobble * (Math.sin(angle * 3 + seed) * 0.55 + Math.sin(angle * 5 + seed * 2.3) * 0.3))
+    points.push(new THREE.Vector3(cx + Math.cos(angle) * r, 0, cz + Math.sin(angle) * r))
+  }
+  return new THREE.CatmullRomCurve3(points, true).getPoints(120).map((p) => new THREE.Vector2(p.x, p.z))
+}
+
+// shape coordinates are (x, -z) so that after rotating the extrusion upright, z lands where we want it
+const toShape = (points, scale = 1) => new THREE.Shape(points.map((p) => new THREE.Vector2(p.x * scale, -p.y * scale)))
+
+// One rounded terrace: flat top (top material) with rocky sides (side material).
+function terrace(points, top, height, topMaterial, sideMaterial) {
+  const bevel = 0.12
+  const geometry = new THREE.ExtrudeGeometry(toShape(points), {
+    depth: height, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 4, curveSegments: 1,
+  })
+  geometry.rotateX(-Math.PI / 2)
+  geometry.translate(0, top - height - bevel, 0)
+  return shadowed(new THREE.Mesh(geometry, [topMaterial, sideMaterial]), false)
+}
+
+// A thin white band where the water meets the land.
+function foamRing(points, inner, outer) {
+  const shape = toShape(points, outer)
+  shape.holes.push(new THREE.Path(toShape(points, inner).getPoints().reverse()))
+  const geometry = new THREE.ShapeGeometry(shape, 1)
+  geometry.rotateX(-Math.PI / 2)
+  const material = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.5, depthWrite: false })
+  return new THREE.Mesh(geometry, material)
+}
+
+// A flat ribbon that follows a curve just above the grass.
+function pathRibbon(points, width, material) {
+  const curve = new THREE.CatmullRomCurve3(points.map(([x, z]) => new THREE.Vector3(x, GROUND_Y + 0.006, z)))
+  const samples = curve.getPoints(60)
+  const positions = []
+  const indices = []
+  samples.forEach((point, index) => {
+    const tangent = curve.getTangent(index / (samples.length - 1))
+    const side = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize().multiplyScalar(width / 2)
+    positions.push(point.x + side.x, point.y, point.z + side.z, point.x - side.x, point.y, point.z - side.z)
+    if (index > 0) {
+      const a = (index - 1) * 2
+      indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2)
+    }
+  })
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geometry.setIndex(indices)
+  geometry.computeVertexNormals()
+  const mesh = new THREE.Mesh(geometry, material)
+  mesh.receiveShadow = true
+  return mesh
+}
+
+function buildTree(scale = 1) {
+  const tree = new THREE.Group()
+  const trunk = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 0.45, 10), standard(PALETTE.trunk)))
+  trunk.position.y = 0.22
+  tree.add(trunk)
+  const leaf = standard(PALETTE.leaf)
+  for (const [x, y, z, r] of [[0, 0.62, 0, 0.3], [0.13, 0.5, 0.08, 0.22], [-0.12, 0.52, -0.05, 0.22], [0, 0.86, 0, 0.2]]) {
+    const puff = shadowed(new THREE.Mesh(new THREE.SphereGeometry(r, 20, 14), leaf))
+    puff.position.set(x, y, z)
+    tree.add(puff)
+  }
+  tree.scale.setScalar(scale)
+  return tree
+}
+
+function buildRock(size) {
+  const geometry = new THREE.IcosahedronGeometry(size, 0)
+  geometry.scale(1, 0.62, 0.9)
+  return shadowed(new THREE.Mesh(geometry, standard('#a59ba5', { flatShading: true })))
+}
+
+function buildLighthouse() {
+  const group = new THREE.Group()
+  const white = standard(COLORS.white)
+  const stripe = standard(PALETTE.stripe)
+  const dark = standard('#5f5763')
+  const stripes = 5
+  const height = 1.5
+  for (let i = 0; i < stripes; i += 1) {
+    const r0 = THREE.MathUtils.lerp(0.4, 0.29, i / stripes)
+    const r1 = THREE.MathUtils.lerp(0.4, 0.29, (i + 1) / stripes)
+    const band = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, height / stripes, 28), i % 2 ? stripe : white))
+    band.position.y = (i + 0.5) * (height / stripes)
+    group.add(band)
+  }
+  const gallery = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.07, 28), dark))
+  gallery.position.y = height + 0.035
+  const glass = new THREE.MeshStandardMaterial({ color: '#fff4c9', roughness: 0.3, emissive: '#ffd66b', emissiveIntensity: 0.25 })
+  const lamp = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.32, 24), glass))
+  lamp.position.y = height + 0.23
+  const cap = shadowed(new THREE.Mesh(new THREE.ConeGeometry(0.34, 0.32, 28), stripe))
+  cap.position.y = height + 0.55
+  const knob = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.06, 14, 10), dark))
+  knob.position.y = height + 0.74
+  const door = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.32, 0.06), standard('#8a6146')))
+  door.position.set(0, 0.16, 0.39)
+  group.add(gallery, lamp, cap, knob, door)
+
+  // flag on the cap: streams with the wind (exchange rate)
+  const pole = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.36, 8), dark))
+  pole.position.y = height + 0.95
+  const pennant = new THREE.Group()
+  pennant.position.y = height + 1.08
+  const cloth = shadowed(new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.26, 3), standard(PALETTE.stripe, { side: THREE.DoubleSide })))
+  cloth.rotation.z = -Math.PI / 2
+  cloth.scale.z = 0.14
+  cloth.position.x = 0.14
+  pennant.add(cloth)
+  group.add(pole, pennant)
+
+  // warm glow around the lamp at night
+  const haloMaterial = new THREE.MeshBasicMaterial({ color: '#ffe59a', transparent: true, opacity: 0, depthWrite: false })
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(0.55, 24, 16), haloMaterial)
+  halo.position.y = height + 0.23
+  group.add(halo)
+  return { group, glass, pennant, haloMaterial }
+}
+
+function buildHouse() {
+  const group = new THREE.Group()
+  const body = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.68, 0.78), standard(COLORS.cream)))
+  body.position.y = 0.34
+  const roof = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.78, 0.52, 4), standard(PALETTE.roof)))
+  roof.rotation.y = Math.PI / 4
+  roof.scale.set(1, 1, 0.86)
+  roof.position.y = 0.94
+  const chimney = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.3, 0.13), standard('#d9a48a')))
+  chimney.position.set(0.26, 1.05, -0.12)
+  const door = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.38, 0.04), standard('#8a6146')))
+  door.position.set(-0.16, 0.19, 0.4)
+  const windowMaterial = new THREE.MeshStandardMaterial({ color: '#cfe9f5', roughness: 0.4, emissive: '#ffcf6b', emissiveIntensity: 0 })
+  const pane = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.18, 0.04), windowMaterial))
+  pane.position.set(0.2, 0.42, 0.4)
+  group.add(body, roof, chimney, door, pane)
+  return { group, windowMaterial }
+}
+
+function buildDock() {
+  const group = new THREE.Group()
+  const wood = standard(PALETTE.wood)
+  const post = standard(PALETTE.post)
+  for (let i = 0; i < 7; i += 1) {
+    const plank = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.06, 0.62), wood))
+    plank.position.set(i * 0.27, 0, 0)
+    plank.rotation.y = (i % 2 ? 1 : -1) * 0.02
+    group.add(plank)
+  }
+  for (const x of [0.15, 0.95, 1.65]) {
+    for (const z of [-0.32, 0.32]) {
+      const pile = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, 1.3, 10), post))
+      pile.position.set(x, -0.6, z)
+      group.add(pile)
+    }
+  }
+  return group
+}
+
+function buildSea() {
+  const geometry = new THREE.PlaneGeometry(60, 60, 110, 110)
+  geometry.rotateX(-Math.PI / 2)
+  const material = new THREE.MeshStandardMaterial({
+    color: PALETTE.daySea, roughness: 0.28, metalness: 0.05, transparent: true, opacity: 0.84,
+  })
+  const mesh = new THREE.Mesh(geometry, material)
+  mesh.receiveShadow = true
+  const base = geometry.attributes.position.array.slice()
+  // the island shelters the water right around it, so waves never wash over the grass
+  const shelter = new Float32Array(geometry.attributes.position.count)
+  for (let i = 0; i < shelter.length; i += 1) {
+    shelter[i] = THREE.MathUtils.smoothstep(Math.hypot(base[i * 3], base[i * 3 + 2]), 3.0, 5.5)
+  }
+  const update = (level, t, rough) => {
+    const position = geometry.attributes.position
+    for (let i = 0; i < position.count; i += 1) {
+      const x = base[i * 3]
+      const z = base[i * 3 + 2]
+      position.array[i * 3 + 1] = level + waveHeight(x * 0.75, z * 0.75, t, rough) * 1.7 * (0.15 + shelter[i] * 0.85)
+    }
+    position.needsUpdate = true
+    geometry.computeVertexNormals()
+  }
+  return { mesh, material, update }
+}
+
+export default function PoriIsland({
+  marketState, touchSignal, waterLevel = 0.5, volatility = 0.2, foreignFlow = 0, institutionFlow = 0,
+  overnight = null, wind = 0, samsung = null, hynix = null, fish = null,
+  focus = 'shore', onPick = null,
+  // what the user tapped: the camera moves in on it
+  selected = null,
+}) {
+  const hostRef = useRef(null)
+  const hotspotRefs = useRef({})
+  const dataRef = useRef(null)
+  const touchRef = useRef({ signal: touchSignal, at: -10 })
+
+  useEffect(() => {
+    dataRef.current = {
+      marketState, waterLevel, volatility, foreign: foreignFlow, institution: institutionFlow,
+      overnight, wind, samsung, hynix, fish, focus, selected,
+    }
+  })
+
+  useEffect(() => {
+    if (touchSignal > 0 && touchSignal !== touchRef.current.signal) {
+      touchRef.current = { signal: touchSignal, at: performance.now() / 1000 }
+    }
+  }, [touchSignal])
+
+  useEffect(() => {
+    const host = hostRef.current
+    if (!host) return undefined
+    const data = () => dataRef.current ?? { marketState: 'loading', waterLevel: 0.5, volatility: 0.2, focus: 'shore' }
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true })
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
+    renderer.shadowMap.enabled = true
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap
+    renderer.toneMapping = THREE.NoToneMapping
+    renderer.domElement.className = 'pori-3d-canvas'
+    host.appendChild(renderer.domElement)
+
+    const scene = new THREE.Scene()
+    const daySky = new THREE.Color(PALETTE.daySky)
+    const nightSky = new THREE.Color(PALETTE.nightSky)
+    const skyColor = daySky.clone()
+    scene.background = skyColor
+    scene.fog = new THREE.Fog(skyColor, 13, 27)
+    const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 80)
+    const target = new THREE.Vector3(0.4, 0.7, 1.3)
+
+    const hemi = new THREE.HemisphereLight('#ffffff', '#ffe2cc', 1.6)
+    const key = new THREE.DirectionalLight('#ffffff', 1.55)
+    key.position.set(-4, 10, 7)
+    key.castShadow = true
+    key.shadow.mapSize.set(2048, 2048)
+    Object.assign(key.shadow.camera, { left: -7, right: 7, top: 7, bottom: -7, near: 1, far: 30 })
+    key.shadow.radius = 6
+    key.shadow.bias = -0.0005
+    key.shadow.normalBias = 0.02
+    const fill = new THREE.DirectionalLight('#ffffff', 0.45)
+    fill.position.set(6, 4, 8)
+    const rim = new THREE.DirectionalLight('#c9fff1', 0.5)
+    rim.position.set(3, 4, -8)
+    scene.add(hemi, key, fill, rim)
+
+    // --- the island ---
+    const grass = standard(PALETTE.grass)
+    const hillGrass = standard(PALETTE.hill)
+    const rock = standard(PALETTE.rock)
+    const sand = standard(PALETTE.sand)
+    const beachOutline = outline(3.95, 0.07, 1.3)
+    const grassOutline = outline(3.25, 0.09, 2.1)
+    const hillOutline = outline(1.3, 0.1, 4, -1.55, -1.35, 12)
+    scene.add(
+      terrace(beachOutline, 0.12, 2.2, sand, rock),
+      terrace(grassOutline, GROUND_Y, 1.2, grass, rock),
+      terrace(hillOutline, 1.05, 1.0, hillGrass, rock),
+    )
+    const pathMaterial = standard(PALETTE.path)
+    scene.add(
+      pathRibbon([[SPOTS.lighthouse.x, SPOTS.lighthouse.z], [0.2, 0.7], [1.4, 0.85], [SPOTS.dock.x + 0.2, SPOTS.dock.z]], 0.3, pathMaterial),
+      pathRibbon([[SPOTS.home.x, SPOTS.home.z], [0.9, 0.5], [0.4, 1.3], [SPOTS.shore.x, SPOTS.shore.z + 0.4]], 0.3, pathMaterial),
+    )
+    // little steps up the hill to the lighthouse
+    for (let i = 0; i < 3; i += 1) {
+      const step = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.2, 0.18), standard('#d8cfc8')))
+      step.position.set(-1.05 - i * 0.04, GROUND_Y + 0.1 + i * 0.2, 0.05 - i * 0.18)
+      scene.add(step)
+    }
+    const lighthouse = buildLighthouse()
+    lighthouse.group.position.set(-1.6, 1.05, -1.4)
+    const house = buildHouse()
+    house.group.position.set(1.45, GROUND_Y, -1.35)
+    house.group.rotation.y = -0.25
+    const dock = buildDock()
+    dock.position.set(2.85, GROUND_Y + 0.02, SPOTS.dock.z)
+    scene.add(lighthouse.group, house.group, dock)
+    for (const [x, z, s] of [[-2.55, 0.35, 1], [-0.2, -2.1, 1.15], [2.55, -0.55, 0.9], [-2.6, -0.6, 0.8], [0.55, -2.55, 0.85]]) {
+      const tree = buildTree(s)
+      tree.position.set(x, GROUND_Y, z)
+      scene.add(tree)
+    }
+    for (const [x, z, s] of [[-3.3, 1.8, 0.28], [3.5, -1.3, 0.34], [-1.2, 3.55, 0.22], [2.2, 3.1, 0.2], [-3.75, -0.6, 0.3]]) {
+      const stone = buildRock(s)
+      stone.position.set(x, 0.12, z)
+      stone.rotation.y = x * 1.7
+      scene.add(stone)
+    }
+    const flowerColors = ['#ff9fb2', '#ffd36b', '#ffffff']
+    for (let i = 0; i < 9; i += 1) {
+      const flower = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), standard(flowerColors[i % 3]))
+      flower.position.set(0.55 + Math.cos(i * 2.4) * 0.45, GROUND_Y + 0.04, -1.0 + Math.sin(i * 2.4) * 0.3)
+      scene.add(flower)
+    }
+
+    // --- the sea ---
+    const sea = buildSea()
+    scene.add(sea.mesh)
+    const beachFoam = foamRing(beachOutline, 0.99, 1.06)
+    const grassFoam = foamRing(grassOutline, 0.99, 1.07)
+    scene.add(beachFoam, grassFoam)
+    const daySea = new THREE.Color(PALETTE.daySea)
+    const nightSea = new THREE.Color(PALETTE.nightSea)
+
+    // --- Pori ---
+    const pori = buildPori()
+    scene.add(pori.root)
+    const startSpot = SPOTS[data().focus] ?? SPOTS.shore
+    const walker = { x: startSpot.x, z: startSpot.z, heading: startSpot.face, phase: 0 }
+
+    // --- boats: berths on either side of the dock; sellers sail out into the fog ---
+    const boats = [
+      { ...buildBoat('#ff8f7d'), key: 'foreign', berth: { x: 4.05, z: SPOTS.dock.z - 0.62 }, away: { x: 12, z: -4 } },
+      { ...buildBoat('#6fa8f5'), key: 'institution', berth: { x: 4.05, z: SPOTS.dock.z + 0.62 }, away: { x: 11, z: 7 } },
+    ]
+    boats.forEach((boat) => {
+      boat.heading = Math.PI
+      scene.add(boat.outer)
+    })
+
+    // --- whales (heavyweight stocks) and fish (today's movers) in the water in front ---
+    const whales = [
+      { ...buildWhale('#6f9cf0', '삼성전자'), key: 'samsung', x: -3.0, z: 4.1, size: 2.0 },
+      { ...buildWhale('#f29a6b', '하이닉스'), key: 'hynix', x: -1.2, z: 4.8, size: 1.8 },
+    ]
+    whales.forEach((whale) => {
+      whale.outer.rotation.y = 2.75
+      scene.add(whale.outer)
+    })
+    const school = [
+      { ...buildFish('#ffcf5c'), x: 0.0, z: 4.35 },
+      { ...buildFish('#ff9fb2'), x: 1.25, z: 4.3 },
+      { ...buildFish('#8fdcc6'), x: 2.45, z: 3.85 },
+    ]
+    school.forEach((item) => {
+      item.outer.rotation.y = -0.45
+      scene.add(item.outer)
+    })
+
+    // --- sky: weather over the open sea (last night's US market), wind streaks, Zzz ---
+    const weather = buildWeather()
+    weather.root.scale.setScalar(1.25)
+    weather.root.position.set(2.9, 3.0, -1.6)
+    scene.add(weather.root)
+    const sky = { sun: 0, cloud: 0, rain: 0, dots: 0, bang: 0, sunBehind: 0, moon: 0 }
+    const cloudColor = new THREE.Color('#ffffff')
+    const cloudTarget = new THREE.Color()
+    const streaks = [[2.7, 0.5, 0], [3.3, 0.7, 0.4], [3.9, 0.45, 0.7], [2.3, 0.6, 0.2]].map(([y, length, phase], index) => {
+      const material = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, depthWrite: false })
+      const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.03, length, 6, 12), material)
+      mesh.rotation.z = Math.PI / 2
+      scene.add(mesh)
+      return { mesh, material, y, phase, z: -2.6 + index * 0.9 }
+    })
+    const zzz = buildZzz()
+    scene.add(zzz.root)
+
+    // --- camera: drag sideways to walk around the island, up/down to tilt ---
+    const view = { width: 1, height: 1, yaw: 0.5, pitch: 0.55, yawTarget: 0.5, pitchTarget: 0.55, distance: 13, zoom: 0 }
+    const homeTarget = target.clone()
+    const lookPoint = target.clone()
+    const zoomPoint = new THREE.Vector3()
+    const placeCamera = () => {
+      const cosPitch = Math.cos(view.pitch)
+      const distance = view.distance * (1 - view.zoom * 0.5)
+      camera.position.set(
+        lookPoint.x + distance * cosPitch * Math.sin(view.yaw),
+        lookPoint.y + distance * Math.sin(view.pitch),
+        lookPoint.z + distance * cosPitch * Math.cos(view.yaw),
+      )
+      camera.lookAt(lookPoint)
+    }
+    // where the camera looks when something is tapped (null = stay on the whole island)
+    const selectionPoint = (name) => {
+      if (name === 'pori') return zoomPoint.set(walker.x, GROUND_Y + 0.5, walker.z)
+      if (name === 'lighthouse' || name === 'weather') return zoomPoint.set(-0.6, 2.0, -1.4)
+      if (name === 'home') return zoomPoint.set(1.45, GROUND_Y + 0.4, -1.35)
+      const boat = boats.find((item) => item.key === name)
+      if (boat) return zoomPoint.copy(boat.outer.position).setY(seaLevel + 0.3)
+      const whale = whales.find((item) => item.key === name)
+      if (whale) return zoomPoint.set(whale.x, seaLevel + 0.2, whale.z)
+      if (name?.startsWith('fish')) {
+        const item = school[Number(name.slice(4))]
+        if (item) return zoomPoint.set(item.x, seaLevel + 0.15, item.z)
+      }
+      return null
+    }
+    const resize = () => {
+      view.width = host.clientWidth || 1
+      view.height = host.clientHeight || 1
+      renderer.setSize(view.width, view.height, false)
+      camera.aspect = view.width / view.height
+      const halfFov = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))
+      // keep the whole island (about 11 wide, 7 tall on screen) in frame
+      // narrow screens may crop the far water a little rather than shrink the island too much
+      view.distance = Math.max(8.6 / 2 / halfFov, (camera.aspect < 1 ? 10.5 : 13.5) / 2 / (halfFov * camera.aspect))
+      // the horizon fades a fixed way past the island, however far the camera sits
+      scene.fog.near = view.distance - 3
+      scene.fog.far = view.distance + 11
+      camera.updateProjectionMatrix()
+    }
+    const resizeObserver = new ResizeObserver(resize)
+    resizeObserver.observe(host)
+    resize()
+
+    const drag = { id: null, x: 0, y: 0 }
+    const onPointerDown = (event) => {
+      drag.id = event.pointerId
+      drag.x = event.clientX
+      drag.y = event.clientY
+      host.setPointerCapture(event.pointerId)
+      host.classList.add('dragging')
+    }
+    const onPointerMove = (event) => {
+      if (drag.id !== event.pointerId) return
+      view.yawTarget = THREE.MathUtils.clamp(view.yawTarget - (event.clientX - drag.x) * 0.006, -1.3, 2.0)
+      if (event.pointerType === 'mouse') {
+        view.pitchTarget = THREE.MathUtils.clamp(view.pitchTarget + (event.clientY - drag.y) * 0.004, 0.32, 1.05)
+      }
+      drag.x = event.clientX
+      drag.y = event.clientY
+    }
+    const onPointerUp = (event) => {
+      if (drag.id !== event.pointerId) return
+      drag.id = null
+      host.classList.remove('dragging')
+    }
+    host.addEventListener('pointerdown', onPointerDown)
+    host.addEventListener('pointermove', onPointerMove)
+    host.addEventListener('pointerup', onPointerUp)
+    host.addEventListener('pointercancel', onPointerUp)
+
+    const projected = new THREE.Vector3()
+    const placeHotspot = (keyName, x, y, z, visible) => {
+      const button = hotspotRefs.current[keyName]
+      if (!button) return
+      projected.set(x, y, z).project(camera)
+      const onScreen = visible && projected.z < 1 && Math.abs(projected.x) < 0.98 && Math.abs(projected.y) < 0.98
+      button.style.display = onScreen ? '' : 'none'
+      if (!onScreen) return
+      const sx = (projected.x * 0.5 + 0.5) * view.width
+      const sy = (-projected.y * 0.5 + 0.5) * view.height
+      button.style.transform = `translate(${sx.toFixed(1)}px, ${sy.toFixed(1)}px) translate(-50%, -50%)`
+    }
+
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const pose = { ...POSES.loading }
+    const live = { happy: 0, jumpY: 0, stretch: 1, armLift: 0, walk: 0, yaw: 0 }
+    let seaLevel = THREE.MathUtils.lerp(SEA_LOW, SEA_HIGH, 0.5)
+    let rough = 0
+    let waveTime = 0
+    let windLevel = 0
+    let nextBlink = 2
+    let blinkStart = -1
+    let stateSince = 0
+    let lastState = data().marketState
+    let last = performance.now() / 1000
+    let frame = 0
+
+    const tick = () => {
+      frame = requestAnimationFrame(tick)
+      const now = performance.now() / 1000
+      const dt = Math.min(now - last, 0.05)
+      last = now
+      const motion = reducedMotion.matches ? 0 : 1
+      const input = data()
+      const state = POSES[input.marketState] ? input.marketState : 'flat'
+      if (state !== lastState) {
+        lastState = state
+        stateSince = now
+      }
+      for (const name of Object.keys(pose)) pose[name] = damp(pose[name], POSES[state][name], 6, dt)
+      const night = pose.sleep
+
+      // --- sea: trading value is the tide, volatility is the chop ---
+      const activity = THREE.MathUtils.clamp((input.waterLevel - 0.08) / 0.92, 0, 1)
+      seaLevel = damp(seaLevel, THREE.MathUtils.lerp(SEA_LOW, SEA_HIGH, activity), 1.8, dt)
+      rough = damp(rough, THREE.MathUtils.clamp(input.volatility ?? 0, 0, 1), 1.6, dt)
+      waveTime += dt * (1 + rough * 0.9) * motion
+      sea.update(seaLevel, waveTime, rough)
+      const beachWet = THREE.MathUtils.smoothstep(seaLevel, 0.08, 0.2)
+      beachFoam.position.y = seaLevel + 0.03
+      grassFoam.position.y = seaLevel + 0.03
+      beachFoam.material.opacity = (1 - beachWet) * (0.35 + rough * 0.45 + Math.sin(now * 1.6) * 0.08 * motion)
+      grassFoam.material.opacity = beachWet * (0.35 + rough * 0.45 + Math.sin(now * 1.6) * 0.08 * motion)
+      const foamPulse = 1 + Math.sin(now * 1.3) * 0.006 * motion * (1 + rough * 2)
+      beachFoam.scale.set(foamPulse, 1, foamPulse)
+      grassFoam.scale.set(foamPulse, 1, foamPulse)
+
+      windLevel = damp(windLevel, THREE.MathUtils.clamp(input.wind ?? 0, -1, 1), 1.5, dt)
+      const windStrength = Math.abs(windLevel)
+      const windDirection = windLevel > 0 ? -1 : 1
+
+      // --- Pori walks to today's spot ---
+      const spot = SPOTS[input.focus] ?? SPOTS.shore
+      const dx = spot.x - walker.x
+      const dz = spot.z - walker.z
+      const distance = Math.hypot(dx, dz)
+      const moving = distance > 0.03 && motion > 0
+      if (!motion) {
+        walker.x = spot.x
+        walker.z = spot.z
+      } else if (moving) {
+        const step = Math.min(distance, WALK_SPEED * dt)
+        walker.x += (dx / distance) * step
+        walker.z += (dz / distance) * step
+      }
+      walker.heading = dampAngle(walker.heading, moving ? Math.atan2(dx, dz) : spot.face, moving ? 9 : 4, dt)
+      live.walk = damp(live.walk, moving ? 1 : 0, 10, dt)
+      walker.phase += dt * 10 * live.walk
+
+      // jump while the market is up (only once Pori has arrived)
+      let jumpY = 0
+      let stretch = 1
+      let armLift = 0
+      if (state === 'rise' && motion && !moving) {
+        const u = (now - stateSince + 0.2) % 2.7
+        if (u < 0.2) {
+          stretch = 1 - 0.1 * Math.sin((u / 0.2) * Math.PI * 0.5)
+        } else if (u < 0.82) {
+          const a = (u - 0.2) / 0.62
+          jumpY = 0.5 * 4 * a * (1 - a)
+          stretch = 1 + 0.07 * Math.abs(Math.cos(a * Math.PI))
+          armLift = Math.sin(a * Math.PI) * 1.25
+        } else if (u < 1.3) {
+          const b = (u - 0.82) / 0.48
+          stretch = 1 - 0.11 * Math.sin(b * Math.PI * 2.5) * (1 - b) ** 2
+        }
+      }
+      live.jumpY = damp(live.jumpY, jumpY, 30, dt)
+      live.stretch = damp(live.stretch, stretch, 26, dt)
+      live.armLift = damp(live.armLift, armLift, 14, dt)
+
+      const sinceTouch = now - touchRef.current.at
+      live.happy = damp(live.happy, sinceTouch < 1.5 && state !== 'closed' ? 1 : 0, 14, dt)
+      const touchBounce = sinceTouch < 0.9 ? Math.sin(sinceTouch * 16) * Math.exp(-sinceTouch * 5) * 0.09 * motion : 0
+      live.yaw = damp(live.yaw, state === 'loading' ? Math.sin(now * 1.6) * 0.4 * motion : 0, 5, dt)
+
+      if (blinkStart < 0 && now > nextBlink) blinkStart = now
+      let blink = 0
+      if (blinkStart >= 0) {
+        const b = (now - blinkStart) / 0.16
+        blink = b >= 1 ? 0 : Math.sin(b * Math.PI)
+        if (b >= 1) {
+          blinkStart = -1
+          nextBlink = now + 2.2 + Math.random() * 2.6
+        }
+      }
+      const breathe = Math.sin(now * (state === 'closed' ? 1.15 : state === 'fall' ? 1.5 : 2.1)) * (1 + pose.sleep * 1.4) * motion
+      const stride = Math.sin(walker.phase)
+
+      const sy = live.stretch * (1 - pose.squash) * (1 + touchBounce)
+      const sxz = 1 / Math.sqrt(sy)
+      pori.root.position.set(
+        walker.x,
+        GROUND_Y + (live.jumpY + Math.abs(stride) * 0.12 * live.walk) * PORI_SCALE,
+        walker.z,
+      )
+      pori.root.scale.set(sxz * PORI_SCALE, sy * PORI_SCALE, sxz * PORI_SCALE)
+      pori.root.rotation.set(0, walker.heading, stride * 0.07 * live.walk)
+      pori.torso.scale.y = 1 + breathe * 0.014
+      pori.torso.scale.x = 1 - breathe * 0.006
+      pori.head.position.y = 1.5 - pose.headDrop + breathe * 0.012
+      pori.head.rotation.set(pose.headPitch + breathe * 0.012 * pose.sleep, live.yaw, pose.headRoll)
+      const armAngle = pose.arm * (1 - live.walk * 0.45) + live.armLift + live.happy * 0.5 + breathe * 0.03
+      pori.arms.forEach((arm, index) => {
+        const side = index === 0 ? -1 : 1
+        arm.rotation.z = side * armAngle
+        arm.rotation.x = -0.15 - live.armLift * 0.2 + Math.sin(walker.phase + index * Math.PI) * 0.7 * live.walk
+      })
+      pori.feet.forEach((foot, index) => {
+        const swing = Math.sin(walker.phase + index * Math.PI)
+        foot.position.y = 0.15 + Math.max(0, swing) * 0.16 * live.walk
+        foot.position.z = 0.14 + swing * 0.14 * live.walk
+      })
+      pori.tail.rotation.z = -1.05 - pose.tail * 0.5 - live.armLift * 0.25 + Math.sin(now * 2.4) * 0.09 * motion
+      pori.tail.rotation.y = Math.sin(now * 1.2 + walker.phase) * 0.15 * motion
+      const earWiggle = Math.max(0, Math.sin(now * 0.9 + 1)) ** 12 * 0.12 * motion
+      pori.ears[0].rotation.z = 0.3 + earWiggle
+      pori.ears[1].rotation.z = -0.3 - earWiggle
+
+      const asleep = pose.sleep * (1 - live.happy)
+      const open = 1 - live.happy
+      const eyeOpen = Math.max(0, 1 - live.happy - asleep)
+      pori.eyes.forEach((eye) => {
+        eye.scale.set(Math.max(eyeOpen, 0.001), Math.max(eyeOpen * (1 - blink * 0.92), 0.001), Math.max(eyeOpen, 0.001))
+      })
+      const lidded = Math.max(live.happy, asleep, 0.001)
+      pori.happyEyes.forEach((eye) => {
+        eye.scale.set(lidded, lidded * (1 - 2 * asleep), lidded)
+        eye.position.y = eye.userData.baseY - 0.05 * asleep
+      })
+      pori.brows.forEach((brow, index) => {
+        const side = index === 0 ? -1 : 1
+        brow.position.y = pose.brow + live.happy * 0.03
+        brow.rotation.z = -side * pose.browTilt
+      })
+      pori.mouth.scale.set((0.85 + Math.abs(pose.mouth) * 0.15) * Math.max(open, 0.001), pose.mouth * Math.max(open, 0.001), 1)
+      pori.openMouth.scale.setScalar(Math.max(live.happy, 0.001))
+      pori.cheeks.forEach((cheek) => cheek.scale.setScalar(1 + live.happy * 0.18))
+
+      // --- boats ---
+      boats.forEach((boat) => {
+        boat.flow = damp(boat.flow, THREE.MathUtils.clamp(input[boat.key] ?? 0, -1, 1), 1.1, dt)
+        const arrive = THREE.MathUtils.smoothstep(boat.flow, -1, 1)
+        const x = THREE.MathUtils.lerp(boat.away.x, boat.berth.x, arrive)
+        const z = THREE.MathUtils.lerp(boat.away.z, boat.berth.z, arrive)
+        const inward = Math.atan2(-(boat.berth.z - boat.away.z), boat.berth.x - boat.away.x)
+        const headingTarget = boat.flow >= -0.08 ? (arrive > 0.9 ? Math.PI : inward) : inward + Math.PI
+        boat.heading = dampAngle(boat.heading, headingTarget, 2, dt)
+        const slope = (waveHeight(x * 0.75 + 0.3, z * 0.75, waveTime, rough) - waveHeight(x * 0.75 - 0.3, z * 0.75, waveTime, rough)) * 1.7 / 0.6
+        boat.outer.position.set(x, seaLevel + waveHeight(x * 0.75, z * 0.75, waveTime, rough) * 1.7 - 0.02, z)
+        boat.outer.rotation.y = boat.heading
+        boat.outer.scale.setScalar(1.25)
+        boat.tilt.rotation.z = Math.atan(slope) * 0.6 + Math.sin(now * 1.9 + boat.berth.z) * 0.035 * motion
+        boat.tilt.rotation.x = Math.sin(now * 1.4 + boat.berth.z * 2) * (0.04 + rough * 0.12) * motion
+        boat.crates.forEach((crate, index) => {
+          const shown = boat.flow > 0.18 + index * 0.28 ? 1 : 0
+          crate.scale.setScalar(Math.max(damp(crate.scale.x, shown, 6, dt), 0.001))
+        })
+        boat.pennant.rotation.y = (windDirection < 0 ? Math.PI : 0) - boat.heading
+        boat.pennant.rotation.z = -(1 - windStrength) * 1.25 + Math.sin(now * 9 + boat.berth.z) * 0.14 * windStrength * motion
+      })
+
+      // --- whales and fish ---
+      const swimmer = (item, raw, index, { hopSize, depthSize, floor }) => {
+        item.shown = damp(item.shown, Number.isFinite(raw) ? 1 : 0, 4, dt)
+        item.level = damp(item.level, THREE.MathUtils.clamp(raw ?? 0, -1, 1), 1.4, dt)
+        const mood = item.level
+        const surface = seaLevel + waveHeight(item.x * 0.75, item.z * 0.75, waveTime, rough) * 1.7
+        let hop = 0
+        let pitch = mood < 0 ? mood * 0.5 : 0
+        if (mood > 0.2 && motion) {
+          const u = ((now + index * 1.3) % 3.2) / 1.05
+          if (u < 1) {
+            hop = Math.sin(u * Math.PI) * hopSize * (0.35 + 0.65 * mood)
+            pitch = Math.cos(u * Math.PI) * 0.75 * mood
+          }
+        }
+        item.hop = damp(item.hop, hop, 16, dt)
+        item.pitch = damp(item.pitch, pitch, 9, dt)
+        item.outer.position.set(
+          item.x + Math.sin(now * 0.6 + index * 2) * 0.08 * motion,
+          Math.max(floor, surface - 0.06 + (mood < 0 ? mood * depthSize : 0)) + item.hop,
+          item.z,
+        )
+        item.outer.visible = item.shown > 0.02
+        item.outer.scale.setScalar((item.size ?? 1.5) * Math.max(item.shown, 0.001))
+        item.tilt.rotation.z = item.pitch + Math.sin(now * 1.6 + index) * 0.05 * motion
+        return mood
+      }
+      whales.forEach((whale, index) => {
+        const mood = swimmer(whale, input[whale.key], index, { hopSize: 0.9, depthSize: 0.7, floor: -0.9 })
+        whale.spout = damp(whale.spout, mood > 0.2 ? 1 : 0, 5, dt)
+        whale.drops.forEach((drop, dropIndex) => {
+          const phase = motion ? (now * 0.9 + dropIndex / 3) % 1 : dropIndex / 3
+          drop.position.set(0.12 + (dropIndex - 1) * 0.07 * phase, 0.24 + phase * 0.3, 0)
+          drop.scale.setScalar(Math.max((1 - phase) * 0.05 * whale.spout, 0.001))
+        })
+      })
+      school.forEach((item, index) => {
+        const entry = input.fish?.[index]
+        if (entry?.name) item.label.setText(entry.name)
+        item.size = 2.0
+        swimmer(item, entry?.name ? entry.level : null, index + 2, { hopSize: 0.6, depthSize: 0.45, floor: -0.7 })
+        item.tail.rotation.y = Math.sin(now * 7 + index) * 0.45 * motion
+      })
+
+      // --- lighthouse: flag in the wind, lamp and beam at night ---
+      lighthouse.pennant.rotation.y = windDirection < 0 ? Math.PI : 0
+      lighthouse.pennant.rotation.z = -(1 - windStrength) * 1.2 + Math.sin(now * 9) * 0.16 * windStrength * motion
+      lighthouse.glass.emissiveIntensity = 0.25 + night * 1.6
+      lighthouse.haloMaterial.opacity = night * (0.22 + Math.sin(now * 1.8) * 0.06 * motion)
+      house.windowMaterial.emissiveIntensity = night * 1.2
+
+      streaks.forEach((streak, index) => {
+        streak.phase = (streak.phase + dt * (0.08 + windStrength * 0.35) * motion) % 1
+        streak.mesh.position.set(windDirection * (-8 + streak.phase * 16), streak.y + Math.sin(now * 1.3 + index) * 0.05 * motion, streak.z)
+        streak.material.opacity = windStrength * 0.8 * Math.sin(streak.phase * Math.PI)
+        streak.mesh.visible = windStrength > 0.06
+      })
+
+      // --- weather over the open sea ---
+      const usLevel = input.overnight
+      const skyKey = ['rise', 'flat', 'fall'].includes(state) && Number.isFinite(usLevel)
+        ? (usLevel > 0.33 ? 'rise' : usLevel < -0.33 ? 'fall' : 'flat')
+        : state
+      const forecast = WEATHER[skyKey]
+      for (const name of Object.keys(sky)) sky[name] = damp(sky[name], forecast[name], 6, dt)
+      cloudColor.lerp(cloudTarget.set(forecast.cloudColor), 1 - Math.exp(-5 * dt))
+      weather.materials.cloud.color.copy(cloudColor)
+      const show = (group, amount) => {
+        group.visible = amount > 0.02
+        group.scale.setScalar(Math.max(amount, 0.001))
+      }
+      weather.root.position.y = 3.0 + Math.sin(now * 1.3) * 0.05 * motion
+      show(weather.sun, sky.sun * (1 - sky.sunBehind * 0.18))
+      weather.sun.position.set(-0.24 * sky.sunBehind, 0.2 * sky.sunBehind, -0.3 * sky.sunBehind)
+      weather.rays.rotation.z = now * 0.35 * motion
+      show(weather.cloud, sky.cloud)
+      show(weather.rain, sky.rain)
+      weather.drops.forEach((drop) => {
+        const fallen = motion ? (now * 0.85 + drop.userData.phase) % 1 : drop.userData.phase
+        const size = Math.sin(Math.min(fallen * 4, 1) * Math.PI * 0.5) * (1 - Math.max(0, fallen - 0.75) * 4)
+        drop.position.set(drop.userData.x, -0.3 - fallen * 0.62, 0.02)
+        drop.scale.set(0.042 * size, 0.07 * size, 0.042 * size)
+      })
+      show(weather.dots, sky.dots)
+      weather.dotMeshes.forEach((dot, index) => {
+        dot.position.y = Math.max(0, Math.sin(now * 4.2 - index * 0.75)) * 0.2 * motion
+      })
+      show(weather.bang, sky.bang)
+      show(weather.moon, sky.moon)
+      weather.stars.forEach((star, index) => {
+        star.scale.setScalar(0.75 + Math.sin(now * 2.6 + index * 2.1) * 0.25 * motion)
+        star.scale.y *= 1.5
+      })
+
+      // --- night ---
+      skyColor.lerpColors(daySky, nightSky, night)
+      scene.fog.color.copy(skyColor)
+      sea.material.color.lerpColors(daySea, nightSea, night)
+      hemi.intensity = 1.6 - night * 0.7
+      key.intensity = 1.55 - night * 0.9
+      zzz.root.visible = night > 0.02
+      zzz.letters.forEach((letter, index) => {
+        const phase = (now * 0.3 * motion + index / 3) % 1
+        const envelope = Math.sin(Math.min(phase * 5, 1) * Math.PI * 0.5) * (1 - THREE.MathUtils.smoothstep(phase, 0.72, 1))
+        letter.position.set(
+          walker.x + 0.1 + phase * 0.25 + Math.sin(phase * 7 + index) * 0.05,
+          GROUND_Y + 1.05 + phase * 1.0,
+          walker.z,
+        )
+        letter.rotation.z = 0.12 + Math.sin(now * 1.4 + index * 1.7) * 0.14 * motion
+        letter.scale.setScalar((0.8 + phase * 1.1) * 0.5 * Math.max(night, 0.001))
+        letter.userData.material.opacity = envelope * night
+      })
+
+      // --- camera ---
+      view.yaw = damp(view.yaw, view.yawTarget, 6, dt)
+      view.pitch = damp(view.pitch, view.pitchTarget, 6, dt)
+      const point = selectionPoint(input.selected)
+      view.zoom = damp(view.zoom, point ? 1 : 0, 3, dt)
+      const goal = point ?? homeTarget
+      lookPoint.x = damp(lookPoint.x, goal.x, 3, dt)
+      lookPoint.y = damp(lookPoint.y, goal.y, 3, dt)
+      lookPoint.z = damp(lookPoint.z, goal.z, 3, dt)
+      placeCamera()
+
+      // --- tap targets follow their objects ---
+      placeHotspot('pori', walker.x, GROUND_Y + 0.45, walker.z, true)
+      placeHotspot('lighthouse', -1.6, 1.85, -1.4, true)
+      placeHotspot('home', 1.45, GROUND_Y + 0.5, -1.35, true)
+      placeHotspot('weather', weather.root.position.x, weather.root.position.y, weather.root.position.z, Number.isFinite(usLevel) && ['rise', 'flat', 'fall'].includes(state))
+      boats.forEach((boat) => placeHotspot(boat.key, boat.outer.position.x, boat.outer.position.y + 0.4, boat.outer.position.z, true))
+      whales.forEach((whale) => placeHotspot(whale.key, whale.outer.position.x, whale.outer.position.y + 0.15, whale.outer.position.z, whale.shown > 0.5))
+      school.forEach((item, index) => placeHotspot(`fish${index}`, item.outer.position.x, item.outer.position.y + 0.1, item.outer.position.z, item.shown > 0.5))
+
+      renderer.render(scene, camera)
+    }
+    tick()
+
+    return () => {
+      cancelAnimationFrame(frame)
+      resizeObserver.disconnect()
+      host.removeEventListener('pointerdown', onPointerDown)
+      host.removeEventListener('pointermove', onPointerMove)
+      host.removeEventListener('pointerup', onPointerUp)
+      host.removeEventListener('pointercancel', onPointerUp)
+      const disposed = new Set()
+      scene.traverse((node) => {
+        node.geometry?.dispose()
+        const materials = Array.isArray(node.material) ? node.material : node.material ? [node.material] : []
+        materials.forEach((material) => {
+          if (disposed.has(material)) return
+          disposed.add(material)
+          material.map?.dispose()
+          material.dispose()
+        })
+      })
+      renderer.dispose()
+      renderer.domElement.remove()
+    }
+  }, [])
+
+  return (
+    <>
+      <div ref={hostRef} className="pori-island" role="img" aria-label={`포리의 섬. 포리는 지금 ${SPOTS[focus]?.name ?? '섬'}에 있어요`} />
+      {onPick && (
+        <div className="scene-hotspots">
+          {HOTSPOTS.map(({ key: name, label, size }) => (
+            <button
+              key={name}
+              ref={(element) => { hotspotRefs.current[name] = element }}
+              type="button"
+              className="scene-hotspot"
+              style={{ width: size, height: size, display: 'none' }}
+              aria-label={label}
+              onClick={() => onPick(name)}
+            />
+          ))}
+        </div>
+      )}
+    </>
+  )
+}

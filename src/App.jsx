@@ -8,6 +8,19 @@ import NewsBriefing from './screens/NewsBriefing'
 import './App.css'
 
 const Pori3D = lazy(() => import('./Pori3D'))
+const PoriIsland = lazy(() => import('./PoriIsland'))
+
+// 기본은 섬 장면. 주소 끝에 ?scene=sea 를 붙이면 예전 바다 단면 장면으로 볼 수 있다.
+const SCENE_MODE = new URLSearchParams(window.location.search).get('scene') === 'sea' ? 'sea' : 'island'
+
+// 오늘 이야기의 분류 → 포리가 가 있는 곳
+const PLACE_BY_TAG = { flow: 'dock', us: 'lighthouse', fx: 'lighthouse', leader: 'shore', stock: 'shore' }
+const PLACE_LINES = {
+  dock: '선착장에서 오가는 배를 보고 있어요',
+  lighthouse: '등대에서 외해를 바라보고 있어요',
+  shore: '물가에서 고래와 물고기를 보고 있어요',
+  home: '집에서 쉬고 있어요',
+}
 
 const PORI_REACTIONS = {
   rise: { title: '포리가 신나게 점프했어요!', message: '오늘도 같이 배워봐요 ☀️' },
@@ -210,6 +223,30 @@ function App() {
   }, [picked])
 
   // 누른 대상의 숫자, 장면에서의 의미, 관련 뉴스
+  // 포리가 오늘 가 있을 곳: 실제 데이터면 오늘의 범인, 시연 중이면 가장 크게 움직인 원인
+  const getFocus = () => {
+    if (marketState === 'closed') return 'home'
+    if (isUnavailable) return 'lighthouse'
+    const allLive = dataMode === 'live' && causeMode === 'live' && flowMode === 'live'
+    if (allLive && briefing?.culprit && PLACE_BY_TAG[briefing.culprit.tag]) return PLACE_BY_TAG[briefing.culprit.tag]
+    const candidates = [
+      ['lighthouse', Math.abs(causeLevel('us'))],
+      ['lighthouse', Math.abs(causeLevel('fx'))],
+      ['dock', Math.abs(toFlowLevel(flows.foreign))],
+      ['shore', Math.max(Math.abs(causeLevel('samsung')), Math.abs(causeLevel('hynix')))],
+    ]
+    return candidates.reduce((best, item) => (item[1] > best[1] ? item : best))[0]
+  }
+  const focus = getFocus()
+
+  const pick = (name) => {
+    if (name === 'pori') {
+      touchPori()
+      return
+    }
+    setPicked(name)
+  }
+
   const getPickedInfo = () => {
     const percent = (value) => `${value > 0 ? '+' : ''}${value.toFixed(2)}%`
     const relatedNews = (tag) => (dataMode === 'live' ? briefing?.items ?? [] : []).filter((item) => item.tag === tag).slice(0, 2)
@@ -243,7 +280,16 @@ function App() {
         news: relatedNews('stock'),
       }
     }
-    if (picked === 'weather') {
+    if (picked === 'home') {
+      return {
+        title: '포리 집',
+        value: '준비 중',
+        tone: '',
+        lines: ['포리가 주워 온 조개를 모아두는 곳이에요. 조개 목걸이는 곧 만들어질 거예요.'],
+        news: [],
+      }
+    }
+    if (picked === 'weather' || picked === 'lighthouse') {
       const lines = ['날씨는 간밤 미국 증시예요. 올랐으면 맑고, 내렸으면 비가 와요.']
       if (causes.us > 0.5 && marketState === 'fall') lines.push('미국은 올랐는데 코스피는 내렸어요. 오늘은 미국 탓이 아니에요.')
       if (causes.us < -0.5 && marketState === 'rise') lines.push('미국은 내렸는데 코스피는 올랐어요. 스스로 힘을 낸 날이에요.')
@@ -297,7 +343,7 @@ function App() {
 
       {screen === 'scene' && (
       <>
-      <main id="top" className="dashboard screen">
+      <main id="top" className={`dashboard screen ${SCENE_MODE}-layout`}>
         <section className="intro">
           <p className="eyebrow">오늘 주식시장은 어떤 기분일까?</p>
           <h1>숫자보다 먼저,<br />오늘 시장의 분위기를 만나요.</h1>
@@ -372,8 +418,23 @@ function App() {
           </article>
         </section>
 
-        <section className={`pori-stage ${marketState}`} aria-label={`포리 상태: ${scenario.label}`}>
+        <section className={`pori-stage ${marketState} ${SCENE_MODE}`} aria-label={`포리 상태: ${scenario.label}`}>
           <Suspense fallback={null}>
+            {SCENE_MODE === 'island' ? (
+              <PoriIsland
+                marketState={marketState} touchSignal={reactionTick} waterLevel={tradingActivity} volatility={volatility}
+                foreignFlow={toFlowLevel(flows.foreign)}
+                institutionFlow={toFlowLevel(flows.institution)}
+                overnight={causeLevel('us')}
+                wind={causeLevel('fx')}
+                samsung={isUnavailable ? null : causeLevel('samsung')}
+                hynix={isUnavailable ? null : causeLevel('hynix')}
+                fish={isUnavailable ? null : fish}
+                focus={focus}
+                onPick={pick}
+                selected={picked ?? (reaction ? 'pori' : null)}
+              />
+            ) : (
             <Pori3D marketState={marketState} touchSignal={reactionTick} waterLevel={tradingActivity} volatility={volatility}
               foreignFlow={toFlowLevel(flows.foreign)}
               institutionFlow={toFlowLevel(flows.institution)}
@@ -384,8 +445,10 @@ function App() {
               fish={isUnavailable ? null : fish}
               onPick={setPicked}
             />
+            )}
           </Suspense>
-          <span className="touch-hint">포리와 주변을 눌러보세요!</span>
+          <span className="touch-hint">{SCENE_MODE === 'island' ? '섬을 끌어서 돌려보고, 눌러보세요!' : '포리와 주변을 눌러보세요!'}</span>
+          {SCENE_MODE === 'sea' && (
           <button
             type="button"
             className={`pori-touch mode-3d ${reaction ? `reaction-${marketState}-${reactionTick % 2 ? 'a' : 'b'}` : ''}`}
@@ -396,6 +459,7 @@ function App() {
               <i>✦</i><i>♥</i><i>✦</i>
             </span>
           </button>
+          )}
           {pickedInfo ? (
             <aside className="scene-info" aria-live="polite">
               <header>
@@ -419,6 +483,7 @@ function App() {
             <div className={`speech ${reaction ? 'reacting' : ''}`} aria-live="polite">
               <strong>{reaction?.title ?? scenario.title}</strong>
               <span>{reaction?.message ?? scenario.message}</span>
+              {SCENE_MODE === 'island' && !reaction && <small className="speech-place">포리는 지금 {PLACE_LINES[focus]}</small>}
             </div>
           )}
         </section>

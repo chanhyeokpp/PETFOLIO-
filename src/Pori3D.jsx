@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 
-const COLORS = {
+export const COLORS = {
   cream: '#fff6e8',
   mint: '#9eecda',
   white: '#fffaf3',
@@ -12,7 +12,7 @@ const COLORS = {
 
 // Pose each market state settles into. Everything is eased toward these values,
 // so switching states blends instead of snapping.
-const POSES = {
+export const POSES = {
   rise: { arm: 1.15, headPitch: -0.06, headRoll: 0, headDrop: 0, brow: 0.05, browTilt: 0, mouth: 1.15, tail: 0.35, squash: 0, sleep: 0 },
   flat: { arm: 0.85, headPitch: 0, headRoll: 0, headDrop: 0, brow: 0, browTilt: 0, mouth: 1, tail: 0, squash: 0, sleep: 0 },
   fall: { arm: 0.42, headPitch: 0.2, headRoll: 0.04, headDrop: 0.05, brow: -0.015, browTilt: 0.42, mouth: -0.9, tail: -0.5, squash: 0.035, sleep: 0 },
@@ -54,7 +54,7 @@ function arc(material, radius, tube, angle) {
   return mesh
 }
 
-function buildPori() {
+export function buildPori() {
   const mat = {
     cream: new THREE.MeshStandardMaterial({ color: COLORS.cream, roughness: 0.82 }),
     mint: new THREE.MeshStandardMaterial({ color: COLORS.mint, roughness: 0.8 }),
@@ -215,7 +215,7 @@ function buildPori() {
 
 // Weather pieces and cloud tint. rise/flat/fall are picked by the overnight US market when known
 // (sunny / partly cloudy / rain); otherwise, and for closed/loading/error, by the market state.
-const WEATHER = {
+export const WEATHER = {
   rise: { sun: 1, cloud: 0, rain: 0, dots: 0, bang: 0, sunBehind: 0, moon: 0, cloudColor: '#ffffff' },
   flat: { sun: 1, cloud: 1, rain: 0, dots: 0, bang: 0, sunBehind: 1, moon: 0, cloudColor: '#ffffff' },
   fall: { sun: 0, cloud: 1, rain: 1, dots: 0, bang: 0, sunBehind: 0, moon: 0, cloudColor: '#d3dff0' },
@@ -224,7 +224,7 @@ const WEATHER = {
   error: { sun: 0, cloud: 1, rain: 0, dots: 0, bang: 1, sunBehind: 0, moon: 0, cloudColor: '#e3e1e6' },
 }
 
-function buildWeather() {
+export function buildWeather() {
   const mat = {
     sun: new THREE.MeshStandardMaterial({ color: '#ffd35a', roughness: 0.7, emissive: '#ff9d00', emissiveIntensity: 0.28 }),
     ray: new THREE.MeshStandardMaterial({ color: '#ffb648', roughness: 0.7, emissive: '#ff8a00', emissiveIntensity: 0.22 }),
@@ -313,7 +313,7 @@ function buildWeather() {
 }
 
 // A little clay sailboat. One per investor group; the sail colour tells them apart.
-function buildBoat(sailColor) {
+export function buildBoat(sailColor) {
   const materials = {
     hull: new THREE.MeshStandardMaterial({ color: '#f1c9a0', roughness: 0.75 }),
     deck: new THREE.MeshStandardMaterial({ color: '#fff3e2', roughness: 0.8 }),
@@ -364,7 +364,7 @@ function buildBoat(sailColor) {
 }
 
 // Small name tag that always faces the camera.
-function buildLabel(text) {
+export function buildLabel(text) {
   const canvas = document.createElement('canvas')
   canvas.width = 256
   canvas.height = 96
@@ -401,7 +401,7 @@ function buildLabel(text) {
 }
 
 // A small clay fish for one of today's most-moved stocks. All fish look alike; only the name tag changes.
-function buildFish(color) {
+export function buildFish(color) {
   const materials = {
     body: new THREE.MeshStandardMaterial({ color, roughness: 0.7 }),
     eye: new THREE.MeshStandardMaterial({ color: COLORS.dark, roughness: 0.4 }),
@@ -440,7 +440,7 @@ function buildFish(color) {
 }
 
 // A clay whale for one heavyweight stock: leaps when the stock is up, sinks nose-down when it falls.
-function buildWhale(color, name) {
+export function buildWhale(color, name) {
   const materials = {
     body: new THREE.MeshStandardMaterial({ color, roughness: 0.72 }),
     belly: new THREE.MeshStandardMaterial({ color: '#fdf6ec', roughness: 0.8 }),
@@ -521,7 +521,7 @@ function buildSwimRing() {
 }
 
 // Three clay "Z"s that drift up from a sleeping Pori.
-function buildZzz() {
+export function buildZzz() {
   const root = new THREE.Group()
   const letters = [0, 1, 2].map(() => {
     const material = new THREE.MeshStandardMaterial({
@@ -551,7 +551,7 @@ const WATER_MAX = 2.0
 const FLOAT_DEPTH = 1.0 // water this deep lifts Pori off the floor
 
 // `rough` (0..1) is the day's volatility: taller swell plus short, fast chop on top.
-const waveHeight = (x, z, t, rough = 0) =>
+export const waveHeight = (x, z, t, rough = 0) =>
   (0.034 * Math.sin(x * 1.5 + t * 1.3)
     + 0.02 * Math.sin(x * 3.1 - t * 1.8 + z * 1.2)
     + 0.014 * Math.sin(z * 2.3 + t * 1.1)) * (0.55 + rough * 1.3)
