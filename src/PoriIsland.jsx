@@ -31,6 +31,7 @@ const SPOTS = {
   lighthouse: { x: -0.95, z: 0.45, face: -0.35, name: '등대' },
   home: { x: 1.3, z: -0.45, face: 0.1, name: '포리 집' },
   chest: { x: 1.75, z: -0.85, face: 0.5, name: '보물상자' },
+  fishing: { x: 4.4, z: 0.95, face: Math.PI / 2, name: '선착장 끝' },
 }
 
 const PALETTE = {
@@ -103,6 +104,7 @@ const HOTSPOTS = [
   { key: 'lighthouse', label: '등대: 외해(간밤 미국 증시)와 바람 보기', size: 84 },
   { key: 'home', label: '포리 집 보기', size: 84 },
   { key: 'chest', label: '보물상자: 모은 조개 보기', size: 70 },
+  { key: 'fishing', label: '낚시하기: 오늘의 화제 종목 낚아 올리기', size: 46, action: '🎣' },
   { key: 'weather', label: '날씨: 간밤 미국 증시 보기', size: 88 },
   { key: 'foreign', label: '외국인 배 보기', size: 70 },
   { key: 'institution', label: '기관 배 보기', size: 70 },
@@ -566,6 +568,10 @@ export default function PoriIsland({
   selected = null,
   // a new shell is waiting in the treasure chest
   chestNew = false,
+  // fishing at the end of the dock: { phase: 'cast' | 'caught', name, level, color } or null
+  fishing = null,
+  // called when the fish bites, so the screen can show the catch in time with the scene
+  onFishingCaught = null,
 }) {
   const hostRef = useRef(null)
   const hotspotRefs = useRef({})
@@ -575,7 +581,7 @@ export default function PoriIsland({
   useEffect(() => {
     dataRef.current = {
       marketState, waterLevel, volatility, foreign: foreignFlow, institution: institutionFlow,
-      overnight, wind, samsung, hynix, fish, focus, selected, chestNew,
+      overnight, wind, samsung, hynix, fish, focus, selected, chestNew, fishing, onFishingCaught,
     }
   })
 
@@ -730,6 +736,118 @@ export default function PoriIsland({
     // --- Pori ---
     const pori = buildPori()
     scene.add(pori.root)
+    // fishing gear: a rod held in Pori's right hand, a line, a bobber, and the fish that gets caught
+    const rod = new THREE.Group()
+    rod.position.set(0.55, 0.75, 0.3)
+    rod.rotation.x = 1.0
+    const pole = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.05, 2.0, 10), standard('#b07a4c')))
+    pole.position.y = 1.0
+    const rodTip = new THREE.Object3D()
+    rodTip.position.y = 2.0
+    rod.add(pole, rodTip)
+    rod.visible = false
+    pori.root.add(rod)
+    const lineGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()])
+    const fishingLine = new THREE.Line(lineGeometry, new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.85 }))
+    fishingLine.frustumCulled = false
+    fishingLine.visible = false
+    const bobber = new THREE.Group()
+    bobber.add(
+      new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), standard('#ff6f61')),
+      new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 10, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), standard('#ffffff')),
+    )
+    bobber.visible = false
+    const catchFish = buildFish('#ffcf5c')
+    catchFish.outer.visible = false
+    catchFish.outer.scale.setScalar(1.6)
+    scene.add(fishingLine, bobber, catchFish.outer)
+    const fishingState = { phase: null, caughtAt: 0, name: null, arrivedAt: null, biteSent: false }
+    const splashMaterial = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, depthWrite: false })
+    const splash = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.018, 8, 32), splashMaterial)
+    splash.rotation.x = -Math.PI / 2
+    scene.add(splash)
+    const castFrom = new THREE.Vector3()
+
+    // a word bubble that pops over Pori's head ("!" on a bite, "낚았다!" on the catch)
+    const makeBadge = (text, fg, bg, width = 256) => {
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = 128
+      const context = canvas.getContext('2d')
+      context.fillStyle = bg
+      context.beginPath()
+      context.roundRect(8, 10, width - 16, 108, 54)
+      context.fill()
+      context.fillStyle = fg
+      context.font = '900 72px Pretendard, system-ui, sans-serif'
+      context.textAlign = 'center'
+      context.textBaseline = 'middle'
+      context.fillText(text, width / 2, 68)
+      const texture = new THREE.CanvasTexture(canvas)
+      texture.colorSpace = THREE.SRGBColorSpace
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false }))
+      sprite.renderOrder = 6
+      sprite.userData.aspect = width / 128
+      sprite.visible = false
+      scene.add(sprite)
+      return sprite
+    }
+    const biteBadge = makeBadge('!', '#ffffff', '#ff6f61', 128)
+    const catchBadge = makeBadge('낚았다!', '#ffffff', '#2fae90', 360)
+
+    // confetti around Pori and droplets at the hook: a small pool of particles reused each catch
+    const particleColors = ['#ffd36b', '#ff9fb2', '#8fdcc6', '#9fc4ff', '#ffffff']
+    const particleMaterials = particleColors.map((color) => new THREE.MeshStandardMaterial({
+      color, roughness: 0.5, emissive: color, emissiveIntensity: 0.35,
+    }))
+    const dropMaterial = new THREE.MeshStandardMaterial({ color: '#e8fbff', roughness: 0.3, transparent: true, opacity: 0.9 })
+    const starGeometry = new THREE.OctahedronGeometry(0.06)
+    const dotGeometry = new THREE.SphereGeometry(0.04, 10, 8)
+    const makeParticles = (count, pick) => Array.from({ length: count }, (_, index) => {
+      const { geometry, material } = pick(index)
+      const mesh = new THREE.Mesh(geometry, material)
+      mesh.visible = false
+      scene.add(mesh)
+      return { mesh, velocity: new THREE.Vector3(), life: 1, spin: 0, size: 1 }
+    })
+    const confetti = makeParticles(26, (index) => ({
+      geometry: index % 2 ? starGeometry : dotGeometry,
+      material: particleMaterials[index % particleMaterials.length],
+    }))
+    const droplets = makeParticles(14, () => ({ geometry: dotGeometry, material: dropMaterial }))
+    const burst = (pool, origin, { speed, up, spread, size }) => {
+      pool.forEach((particle) => {
+        const angle = Math.random() * Math.PI * 2
+        const out = spread * (0.5 + Math.random() * 0.5)
+        particle.mesh.position.copy(origin)
+        particle.velocity.set(Math.cos(angle) * out, up * (0.6 + Math.random() * 0.6), Math.sin(angle) * out).multiplyScalar(speed)
+        particle.life = 0
+        particle.spin = (Math.random() - 0.5) * 12
+        particle.size = size * (0.7 + Math.random() * 0.6)
+        particle.mesh.visible = true
+      })
+    }
+    const stepParticles = (pool, dt, gravity, lifetime) => {
+      pool.forEach((particle) => {
+        if (particle.life >= 1) return
+        particle.life += dt / lifetime
+        particle.velocity.y -= gravity * dt
+        particle.mesh.position.addScaledVector(particle.velocity, dt)
+        particle.mesh.rotation.x += particle.spin * dt
+        particle.mesh.rotation.y += particle.spin * dt
+        particle.mesh.scale.setScalar(Math.max(particle.size * (1 - particle.life), 0.001))
+        if (particle.life >= 1) particle.mesh.visible = false
+      })
+    }
+    const burstOrigin = new THREE.Vector3()
+    // fishing timeline (seconds after Pori reaches the end of the dock)
+    const CAST_END = 1.1
+    const BITE_AT = CAST_END + 4.2
+    const BITE_LEN = 1.1
+    const easeInOut = (x) => (x < 0.5 ? 2 * x * x : 1 - (-2 * x + 2) ** 2 / 2)
+    const tipWorld = new THREE.Vector3()
+    const BOBBER = { x: SPOTS.fishing.x + 1.05, z: SPOTS.fishing.z }
+
     const startSpot = SPOTS[data().focus] ?? SPOTS.shore
     const walker = { x: startSpot.x, z: startSpot.z, heading: startSpot.face, phase: 0 }
 
@@ -842,6 +960,7 @@ export default function PoriIsland({
       if (name === 'pori') return zoomPoint.set(walker.x, GROUND_Y + 0.5, walker.z)
       if (name === 'lighthouse' || name === 'weather') return zoomPoint.set(-0.6, 2.0, -1.4)
       if (name === 'home') return zoomPoint.set(1.45, GROUND_Y + 0.4, -1.35)
+      if (name === 'fishing') return zoomPoint.set(SPOTS.fishing.x + 0.45, GROUND_Y + 0.3, SPOTS.fishing.z)
       if (name === 'chest') {
         // the shell list covers the right side (or the bottom on a phone), so frame the chest off-centre
         if (camera.aspect < 1) return zoomPoint.set(CHEST_SPOT.x - 0.2, GROUND_Y - 0.5, CHEST_SPOT.z)
@@ -921,7 +1040,7 @@ export default function PoriIsland({
 
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
     const pose = { ...POSES.loading }
-    const live = { happy: 0, jumpY: 0, stretch: 1, armLift: 0, walk: 0, yaw: 0 }
+    const live = { happy: 0, jumpY: 0, stretch: 1, armLift: 0, walk: 0, yaw: 0, focus: 0, surprise: 0, headYaw: 0 }
     let seaLevel = THREE.MathUtils.lerp(SEA_LOW, SEA_HIGH, 0.5)
     let rough = 0
     let waveTime = 0
@@ -983,6 +1102,109 @@ export default function PoriIsland({
       live.walk = damp(live.walk, moving ? 1 : 0, 10, dt)
       walker.phase += dt * 10 * live.walk
 
+      // --- fishing timeline: wind up, cast, wait, bite, yank, celebrate ---
+      const fishingInput = input.fishing
+      if ((fishingInput?.phase ?? null) !== fishingState.phase) {
+        fishingState.phase = fishingInput?.phase ?? null
+        if (fishingState.phase === 'caught') {
+          fishingState.caughtAt = now
+          fishingState.dropsSent = false
+          fishingState.confettiSent = 0
+        }
+        if (fishingState.phase === 'cast') {
+          // a fresh cast replays the whole routine, even if Pori is already standing on the dock
+          fishingState.biteSent = false
+          fishingState.arrivedAt = null
+        }
+      }
+      const atDock = Boolean(fishingInput) && Math.hypot(walker.x - SPOTS.fishing.x, walker.z - SPOTS.fishing.z) < 0.08
+      if (!atDock) fishingState.arrivedAt = null
+      else if (fishingState.arrivedAt === null) fishingState.arrivedAt = now
+      const fx = {
+        active: atDock, rod: 1.0, lean: 0, head: 0, headYaw: 0, leftArm: null, hop: 0, cheer: false,
+        flight: 0, bite: 0, hook: -1, focus: 0, surprise: 0, tail: 0,
+      }
+      if (atDock) {
+        const t = now - fishingState.arrivedAt
+        if (fishingState.phase === 'cast') {
+          if (t < 0.35) {
+            fx.rod = THREE.MathUtils.lerp(1.0, -0.4, easeInOut(t / 0.35)) // wind up over the shoulder
+            fx.lean = -0.12 * (t / 0.35)
+          } else if (t < 0.6) {
+            const a = (t - 0.35) / 0.25
+            fx.rod = THREE.MathUtils.lerp(-0.4, 1.4, a) // whip forward
+            fx.lean = THREE.MathUtils.lerp(-0.12, 0.16, a)
+          } else if (t < CAST_END) {
+            const a = (t - 0.6) / (CAST_END - 0.6)
+            fx.rod = THREE.MathUtils.lerp(1.4, 1.0, easeInOut(a))
+            fx.lean = THREE.MathUtils.lerp(0.16, 0.04, a)
+          } else {
+            // waiting: a little routine so Pori never just stands there, with a focused face throughout
+            const w = t - CAST_END
+            fx.focus = 1
+            fx.rod = 1.0 + Math.sin(now * 1.7) * 0.05 * motion
+            fx.lean = 0.06 + Math.sin(now * 1.1) * 0.02 * motion
+            fx.head = 0.22
+            if (w < 1.0) {
+              // settle in: a slow sway, eyes on the bobber
+              fx.lean += Math.sin(w * 3) * 0.03
+            } else if (w < 1.9) {
+              // lean right out over the water to peer at the bobber
+              const a = Math.sin(((w - 1.0) / 0.9) * Math.PI)
+              fx.lean += 0.14 * a
+              fx.head += 0.12 * a
+            } else if (w < 2.7) {
+              // tap the rod twice to tease the fish
+              const a = (w - 1.9) / 0.8
+              fx.rod += Math.max(0, Math.sin(a * Math.PI * 4)) * 0.16
+              fx.tail = Math.sin(a * Math.PI * 4) * 0.5
+            } else if (w < 3.5) {
+              // a quick glance over the shoulder at you: "shh, nearly there"
+              const a = Math.sin(((w - 2.7) / 0.8) * Math.PI)
+              fx.headYaw = -0.7 * a
+              fx.focus = 1 - a * 0.6
+            } else {
+              // reel in a touch with the other paw
+              fx.leftArm = 0.7 + Math.sin(now * 12) * 0.25 * motion
+            }
+          }
+          fx.flight = THREE.MathUtils.clamp((t - 0.45) / (CAST_END - 0.45), 0, 1)
+          if (t > BITE_AT) {
+            fx.bite = 1
+            fx.rod += Math.sin(now * 24) * 0.07 * motion // the rod jiggles as something nibbles
+            fx.lean = 0.14
+            fx.head = 0.3
+            fx.headYaw = 0
+            fx.focus = 0
+            fx.surprise = 1 // eyes wide: something's biting!
+            fx.leftArm = 0.9
+          }
+          if (t > BITE_AT + BITE_LEN && !fishingState.biteSent) {
+            fishingState.biteSent = true
+            input.onFishingCaught?.()
+          }
+        } else if (fishingState.phase === 'caught') {
+          const k = now - fishingState.caughtAt
+          fx.hook = k
+          if (k < 0.25) {
+            fx.rod = THREE.MathUtils.lerp(1.0, -0.1, easeInOut(k / 0.25)) // yank!
+            fx.lean = THREE.MathUtils.lerp(0.14, -0.2, k / 0.25)
+          } else {
+            // then hold the catch out over the water, in front of Pori rather than in its face
+            fx.rod = THREE.MathUtils.lerp(-0.1, 0.75, Math.min((k - 0.25) / 0.8, 1)) + Math.sin(now * 2) * 0.04 * motion
+            fx.lean = THREE.MathUtils.lerp(-0.2, -0.05, Math.min((k - 0.25) / 0.8, 1))
+          }
+          fx.leftArm = 1.0 // both paws up on the rod
+          fx.head = -0.12
+          if (k > 0.9 && k < 3.0) {
+            fx.cheer = true
+            fx.hop = Math.abs(Math.sin((k - 0.9) * Math.PI * 1.8)) * 0.45 * motion
+            fx.leftArm = 2.2 + Math.sin(now * 10) * 0.3 * motion // paw up in triumph
+            fx.tail = Math.sin(now * 14) * 0.7
+          }
+        }
+      }
+
       // jump while the market is up (only once Pori has arrived)
       let jumpY = 0
       let stretch = 1
@@ -1006,7 +1228,10 @@ export default function PoriIsland({
       live.armLift = damp(live.armLift, armLift, 14, dt)
 
       const sinceTouch = now - touchRef.current.at
-      live.happy = damp(live.happy, sinceTouch < 1.5 && state !== 'closed' ? 1 : 0, 14, dt)
+      live.happy = damp(live.happy, (sinceTouch < 1.5 || fx.cheer) && state !== 'closed' ? 1 : 0, 14, dt)
+      live.focus = damp(live.focus, fx.focus, 8, dt)
+      live.surprise = damp(live.surprise, fx.surprise, 14, dt)
+      live.headYaw = damp(live.headYaw, fx.headYaw, 7, dt)
       const touchBounce = sinceTouch < 0.9 ? Math.sin(sinceTouch * 16) * Math.exp(-sinceTouch * 5) * 0.09 * motion : 0
       live.yaw = damp(live.yaw, state === 'loading' ? Math.sin(now * 1.6) * 0.4 * motion : 0, 5, dt)
 
@@ -1027,19 +1252,25 @@ export default function PoriIsland({
       const sxz = 1 / Math.sqrt(sy)
       pori.root.position.set(
         walker.x,
-        GROUND_Y + (live.jumpY + Math.abs(stride) * 0.12 * live.walk) * PORI_SCALE,
+        GROUND_Y + (live.jumpY + fx.hop + Math.abs(stride) * 0.12 * live.walk) * PORI_SCALE,
         walker.z,
       )
       pori.root.scale.set(sxz * PORI_SCALE, sy * PORI_SCALE, sxz * PORI_SCALE)
-      pori.root.rotation.set(0, walker.heading, stride * 0.07 * live.walk)
+      pori.root.rotation.set(fx.lean, walker.heading, stride * 0.07 * live.walk)
       pori.torso.scale.y = 1 + breathe * 0.014
       pori.torso.scale.x = 1 - breathe * 0.006
       pori.head.position.y = 1.5 - pose.headDrop + breathe * 0.012
-      pori.head.rotation.set(pose.headPitch + breathe * 0.012 * pose.sleep, live.yaw, pose.headRoll)
+      pori.head.rotation.set(pose.headPitch + fx.head + breathe * 0.012 * pose.sleep, live.yaw + live.headYaw, pose.headRoll + (fx.bite ? 0.12 : 0))
       const armAngle = pose.arm * (1 - live.walk * 0.45) + live.armLift + live.happy * 0.5 + breathe * 0.03
+      rod.visible = fx.active
+      rod.rotation.x = fx.rod
       pori.arms.forEach((arm, index) => {
         const side = index === 0 ? -1 : 1
-        arm.rotation.z = side * armAngle
+        let angle = side * armAngle
+        // the rod hand rises as the rod swings back; the other paw joins in when reeling
+        if (fx.active && index === 1) angle = 1.15 + (1.0 - fx.rod) * 0.45
+        if (fx.active && index === 0 && fx.leftArm !== null) angle = -fx.leftArm
+        arm.rotation.z = angle
         arm.rotation.x = -0.15 - live.armLift * 0.2 + Math.sin(walker.phase + index * Math.PI) * 0.7 * live.walk
       })
       pori.feet.forEach((foot, index) => {
@@ -1047,7 +1278,7 @@ export default function PoriIsland({
         foot.position.y = 0.15 + Math.max(0, swing) * 0.16 * live.walk
         foot.position.z = 0.14 + swing * 0.14 * live.walk
       })
-      pori.tail.rotation.z = -1.05 - pose.tail * 0.5 - live.armLift * 0.25 + Math.sin(now * 2.4) * 0.09 * motion
+      pori.tail.rotation.z = -1.05 - pose.tail * 0.5 - live.armLift * 0.25 + Math.sin(now * 2.4) * 0.09 * motion + fx.tail * 0.4 * motion
       pori.tail.rotation.y = Math.sin(now * 1.2 + walker.phase) * 0.15 * motion
       const earWiggle = Math.max(0, Math.sin(now * 0.9 + 1)) ** 12 * 0.12 * motion
       pori.ears[0].rotation.z = 0.3 + earWiggle
@@ -1056,8 +1287,14 @@ export default function PoriIsland({
       const asleep = pose.sleep * (1 - live.happy)
       const open = 1 - live.happy
       const eyeOpen = Math.max(0, 1 - live.happy - asleep)
+      const eyeWide = 1 + live.surprise * 0.25
+      const squint = 1 - live.focus * 0.5
       pori.eyes.forEach((eye) => {
-        eye.scale.set(Math.max(eyeOpen, 0.001), Math.max(eyeOpen * (1 - blink * 0.92), 0.001), Math.max(eyeOpen, 0.001))
+        eye.scale.set(
+          Math.max(eyeOpen * eyeWide, 0.001),
+          Math.max(eyeOpen * eyeWide * squint * (1 - blink * 0.92), 0.001),
+          Math.max(eyeOpen, 0.001),
+        )
       })
       const lidded = Math.max(live.happy, asleep, 0.001)
       pori.happyEyes.forEach((eye) => {
@@ -1066,10 +1303,15 @@ export default function PoriIsland({
       })
       pori.brows.forEach((brow, index) => {
         const side = index === 0 ? -1 : 1
-        brow.position.y = pose.brow + live.happy * 0.03
-        brow.rotation.z = -side * pose.browTilt
+        brow.position.y = pose.brow + live.happy * 0.03 - live.focus * 0.025 + live.surprise * 0.05
+        brow.rotation.z = -side * (pose.browTilt * (1 - live.focus) - 0.38 * live.focus)
       })
-      pori.mouth.scale.set((0.85 + Math.abs(pose.mouth) * 0.15) * Math.max(open, 0.001), pose.mouth * Math.max(open, 0.001), 1)
+      const pursed = Math.max(live.focus, live.surprise)
+      pori.mouth.scale.set(
+        (0.85 + Math.abs(pose.mouth) * 0.15) * Math.max(open, 0.001) * (1 - pursed * 0.45),
+        pose.mouth * Math.max(open, 0.001) * (1 - pursed * 0.8),
+        1,
+      )
       pori.openMouth.scale.setScalar(Math.max(live.happy, 0.001))
       pori.cheeks.forEach((cheek) => cheek.scale.setScalar(1 + live.happy * 0.18))
 
@@ -1155,6 +1397,92 @@ export default function PoriIsland({
         swimmer(item, entry?.name ? entry.level : null, index + 2, { hopSize: 0.6, depthSize: 0.18, floor: -0.7 })
         item.tail.rotation.y = Math.sin(now * 7 + index) * 0.45 * motion
       })
+
+      // --- fishing gear: bobber flies out on the cast, dunks on a bite; the catch leaps out on the line ---
+      rodTip.getWorldPosition(tipWorld)
+      const castPhase = fx.active && fishingState.phase === 'cast'
+      bobber.visible = castPhase && fx.flight > 0
+      if (bobber.visible) {
+        if (fx.flight < 1) {
+          // arc from the rod tip to where it lands
+          if (fx.flight < 0.05) castFrom.copy(tipWorld)
+          const f = fx.flight
+          bobber.position.set(
+            THREE.MathUtils.lerp(castFrom.x, BOBBER.x, f),
+            THREE.MathUtils.lerp(castFrom.y, seaLevel + 0.02, f) + Math.sin(f * Math.PI) * 0.5,
+            THREE.MathUtils.lerp(castFrom.z, BOBBER.z, f),
+          )
+        } else {
+          const dunk = fx.bite ? Math.abs(Math.sin(now * 13)) * 0.08 : 0
+          bobber.position.set(BOBBER.x, seaLevel + 0.02 + Math.sin(now * 2.4) * 0.02 * motion - dunk * motion, BOBBER.z)
+        }
+      }
+      // splash when the bobber lands, and again when the fish is hooked
+      const landing = castPhase && fx.flight >= 1 ? (now - fishingState.arrivedAt - CAST_END) : -1
+      const splashAge = fx.hook >= 0 ? fx.hook : landing >= 0 && landing < 0.8 ? landing : -1
+      splash.visible = splashAge >= 0 && splashAge < 0.8
+      if (splash.visible) {
+        splash.position.set(BOBBER.x, seaLevel + 0.03, BOBBER.z)
+        splash.scale.setScalar(1 + splashAge * (fx.hook >= 0 ? 5 : 3))
+        splashMaterial.opacity = (1 - splashAge / 0.8) * 0.8
+      }
+      catchFish.outer.visible = fx.active && fishingState.phase === 'caught'
+      if (catchFish.outer.visible) {
+        if (fishingInput.name && fishingInput.name !== fishingState.name) {
+          fishingState.name = fishingInput.name
+          catchFish.label.setText(fishingInput.name)
+          catchFish.materials[0].color.set(fishingInput.color ?? '#ffcf5c')
+        }
+        // leaps out of the water in an arc, then dangles and swings under the rod tip
+        const k = Math.min(fx.hook / 1.1, 1)
+        const swing = k >= 1 ? Math.sin(now * 3) * 0.12 * motion : 0
+        catchFish.outer.position.set(
+          THREE.MathUtils.lerp(BOBBER.x, tipWorld.x, easeInOut(k)) + swing,
+          THREE.MathUtils.lerp(seaLevel - 0.1, tipWorld.y - 0.45, k) + Math.sin(k * Math.PI) * 0.6,
+          THREE.MathUtils.lerp(BOBBER.z, tipWorld.z, easeInOut(k)),
+        )
+        catchFish.tilt.rotation.z = Math.PI / 2 + Math.sin(now * (k < 1 ? 20 : 9)) * (k < 1 ? 0.5 : 0.25) * motion
+        catchFish.tail.rotation.y = Math.sin(now * 18) * 0.6 * motion
+      }
+      // bite "!", catch "낚았다!", droplets at the hook, confetti around Pori
+      const badgeY = GROUND_Y + 1.25 + fx.hop * PORI_SCALE
+      biteBadge.visible = fx.active && fx.bite > 0 && fishingState.phase === 'cast'
+      if (biteBadge.visible) {
+        const pop = 0.32 + Math.abs(Math.sin(now * 10)) * 0.05
+        biteBadge.position.set(walker.x, badgeY, walker.z)
+        biteBadge.scale.set(pop, pop, 1)
+      }
+      const cheerAge = fx.hook - 0.9
+      catchBadge.visible = fx.active && cheerAge >= 0 && cheerAge < 2.6
+      if (catchBadge.visible) {
+        const pop = Math.min(cheerAge / 0.18, 1) * (1 + Math.sin(Math.min(cheerAge / 0.35, 1) * Math.PI) * 0.25)
+        catchBadge.position.set(walker.x, badgeY + 0.1 + cheerAge * 0.08, walker.z)
+        catchBadge.scale.set(0.3 * catchBadge.userData.aspect * pop, 0.3 * pop, 1)
+        catchBadge.material.opacity = cheerAge > 2.1 ? 1 - (cheerAge - 2.1) / 0.5 : 1
+      }
+      if (fx.active && fx.hook >= 0 && !fishingState.dropsSent) {
+        fishingState.dropsSent = true
+        burst(droplets, burstOrigin.set(BOBBER.x, seaLevel + 0.05, BOBBER.z), { speed: 1, up: 2.6, spread: 1.0, size: 1 })
+      }
+      if (fx.active && cheerAge >= 0 && fishingState.confettiSent < 1) {
+        fishingState.confettiSent = 1
+        burst(confetti, burstOrigin.set(walker.x, GROUND_Y + 0.75, walker.z), { speed: 1, up: 3.2, spread: 1.6, size: 1 })
+      }
+      if (fx.active && cheerAge >= 0.7 && fishingState.confettiSent < 2) {
+        fishingState.confettiSent = 2
+        burst(confetti, burstOrigin.set(walker.x, GROUND_Y + 0.75, walker.z), { speed: 0.8, up: 3.0, spread: 1.2, size: 0.8 })
+      }
+      stepParticles(confetti, dt, 5, 1.4)
+      stepParticles(droplets, dt, 7, 0.9)
+
+      fishingLine.visible = fx.active && (bobber.visible || catchFish.outer.visible)
+      if (fishingLine.visible) {
+        const end = catchFish.outer.visible ? catchFish.outer.position : bobber.position
+        const positions = lineGeometry.attributes.position
+        positions.setXYZ(0, tipWorld.x, tipWorld.y, tipWorld.z)
+        positions.setXYZ(1, end.x, end.y + (catchFish.outer.visible ? 0.2 : 0.05), end.z)
+        positions.needsUpdate = true
+      }
 
       // --- lighthouse: flag in the wind, lamp and beam at night ---
       lighthouse.pennant.rotation.y = windDirection < 0 ? Math.PI : 0
@@ -1247,6 +1575,7 @@ export default function PoriIsland({
       placeHotspot('lighthouse', -1.6, 1.85, -1.4, true)
       placeHotspot('home', 1.45, GROUND_Y + 0.5, -1.35, true)
       placeHotspot('chest', CHEST_SPOT.x, GROUND_Y + 0.2, CHEST_SPOT.z, true)
+      placeHotspot('fishing', 4.6, GROUND_Y + 0.25, SPOTS.dock.z, !input.fishing && ['rise', 'flat', 'fall'].includes(state) && input.fish?.length > 0)
       placeHotspot('weather', weather.root.position.x, weather.root.position.y, weather.root.position.z, Number.isFinite(usLevel) && ['rise', 'flat', 'fall'].includes(state))
       boats.forEach((boat) => placeHotspot(boat.key, boat.outer.position.x, boat.outer.position.y + 0.4, boat.outer.position.z, true))
       whales.forEach((whale) => placeHotspot(whale.key, whale.outer.position.x, whale.outer.position.y + 0.15, whale.outer.position.z, whale.shown > 0.5))
@@ -1285,16 +1614,19 @@ export default function PoriIsland({
       <div ref={hostRef} className="pori-island" role="img" aria-label={`포리의 섬. 포리는 지금 ${SPOTS[focus]?.name ?? '섬'}에 있어요`} />
       {onPick && (
         <div className="scene-hotspots">
-          {HOTSPOTS.map(({ key: name, label, size }) => (
+          {HOTSPOTS.map(({ key: name, label, size, action }) => (
             <button
               key={name}
               ref={(element) => { hotspotRefs.current[name] = element }}
               type="button"
-              className="scene-hotspot"
+              className={`scene-hotspot ${action ? 'action' : ''}`}
               style={{ width: size, height: size, display: 'none' }}
               aria-label={label}
+              title={action ? label : undefined}
               onClick={() => onPick(name)}
-            />
+            >
+              {action && <span aria-hidden="true">{action}</span>}
+            </button>
           ))}
         </div>
       )}

@@ -337,3 +337,20 @@ h1,.screen-title,.culprit-card strong,.news-body > strong,.news-body a { word-br
 @media (max-width: 520px) {
   .shell-chest { top: auto; left: 12px; right: 12px; bottom: 12px; width: auto; max-height: 72%; }
 }
+
+/* ---------- 낚시 ---------- */
+.scene-hotspot.action { display: grid; place-items: center; background: rgba(255,255,255,.92); border: 2px solid #fff; box-shadow: 0 6px 16px rgba(33,95,79,.22); font-size: 22px; animation: action-bob 2.4s ease-in-out infinite; }
+.scene-hotspot.action span { pointer-events: none; }
+.scene-hotspot.action:hover { background: #fff; border-color: #ffd36b; }
+@keyframes action-bob { 0%,100% { margin-top: 0; } 50% { margin-top: -5px; } }
+.fishing-card .fishing-catch { display: flex; align-items: baseline; gap: 10px; }
+.fishing-card .fishing-catch strong { color: #26282c; font-size: 18px; letter-spacing: -.02em; }
+.fishing-card .fishing-catch b { font-size: 16px; }
+.fishing-card .fishing-catch b.up { color: #168a6d; }
+.fishing-card .fishing-catch b.down { color: #3270b7; }
+.fishing-card li { display: grid; gap: 1px; }
+.fishing-card li small { color: #8a9097; font-size: 11px; font-weight: 700; }
+.fishing-wait { color: #8a9097 !important; }
+.fishing-again { justify-self: start; margin-top: 2px; padding: 7px 12px; color: #1f6d59; background: #e7f8f2; border: 1px solid #bfe7da; border-radius: 999px; font-size: 13px; font-weight: 800; cursor: pointer; }
+.fishing-again:hover { background: #d8f3ea; }
+@media (prefers-reduced-motion: reduce) { .scene-hotspot.action { animation: none; } }

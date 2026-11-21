@@ -68,12 +68,15 @@ function scoreArticle(article) {
 }
 
 // 오늘(한국 날짜) 나온 코스피 기사만, 같은 제목은 하나로.
-export function filterRelevant(articles, now = new Date()) {
+// keyword: 제목에 꼭 들어가야 하는 말. withinHours를 주면 '오늘(한국 날짜)' 대신 최근 몇 시간으로 거른다.
+export function filterRelevant(articles, now = new Date(), keyword = '코스피', withinHours = null) {
   const today = kstDay(now)
   const seen = new Set()
   return articles.filter((article) => {
-    if (!article.title.includes('코스피') || article.title.startsWith('[표]')) return false
-    if (!article.publishedAt || kstDay(new Date(article.publishedAt)) !== today) return false
+    if (!article.title.includes(keyword) || article.title.startsWith('[표]')) return false
+    if (!article.publishedAt) return false
+    const published = new Date(article.publishedAt)
+    if (withinHours === null ? kstDay(published) !== today : now - published > withinHours * 3600 * 1000) return false
     const key = article.title.replace(/[^0-9a-zA-Z가-힣]/g, '')
     if (seen.has(key)) return false
     seen.add(key)

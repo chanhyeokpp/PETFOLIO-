@@ -23,6 +23,7 @@ const PLACE_LINES = {
   shore: '물가에서 고래와 물고기를 보고 있어요',
   home: '집에서 쉬고 있어요',
   chest: '보물상자를 열어 보여주고 있어요',
+  fishing: '선착장 끝에서 낚시를 하고 있어요',
 }
 
 const PORI_REACTIONS = {
@@ -102,6 +103,9 @@ function App() {
   // 장면에서 누른 것(배, 날씨, 고래). null이면 말풍선을 보여준다.
   const [picked, setPicked] = useState(null)
   const [storedShells] = useState(readShells)
+  // 낚시: null | { phase: 'cast' | 'caught', index, news }
+  const [fishing, setFishing] = useState(null)
+  const fishingTimer = useRef(null)
   const [shellsSeenDay, setShellsSeenDay] = useState(readSeenDay)
   const reactionTimer = useRef(null)
   const marketState = scenario.state ?? getMarketState(scenario.changeRate)
@@ -188,7 +192,10 @@ function App() {
     return () => window.clearTimeout(timeoutId)
   }, [loadKospi])
 
-  useEffect(() => () => window.clearTimeout(reactionTimer.current), [])
+  useEffect(() => () => {
+    window.clearTimeout(reactionTimer.current)
+    window.clearTimeout(fishingTimer.current)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -220,16 +227,53 @@ function App() {
     setScreen('scene')
   }
 
+  const stopFishing = () => {
+    window.clearTimeout(fishingTimer.current)
+    setFishing(null)
+  }
+
   useEffect(() => {
-    if (!picked) return undefined
-    const onKey = (event) => { if (event.key === 'Escape') setPicked(null) }
+    if (!picked && !fishing) return undefined
+    const onKey = (event) => {
+      if (event.key !== 'Escape') return
+      setPicked(null)
+      window.clearTimeout(fishingTimer.current)
+      setFishing(null)
+    }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [picked])
+  }, [picked, fishing])
+
+  // 포리가 선착장 끝에서 낚싯대를 드리우면, 오늘의 화제 종목 하나가 걸려 올라온다
+  const FISH_COLORS = ['#ffcf5c', '#ff9fb2', '#8fdcc6']
+  const startFishing = () => {
+    if (!movers.length) return
+    window.clearTimeout(fishingTimer.current)
+    setPicked(null)
+    // 같은 종목이 연달아 걸리지 않게
+    const choices = movers.map((_, index) => index).filter((index) => index !== fishing?.index || movers.length === 1)
+    const index = choices[Math.floor(Math.random() * choices.length)]
+    const mover = movers[index]
+    setFishing({ phase: 'cast', index, news: undefined })
+    fetch(`/api/stock-news?name=${encodeURIComponent(mover.name)}`)
+      .then((response) => (response.ok ? response.json() : null))
+      .catch(() => null)
+      .then((data) => setFishing((current) => (current?.index === index ? { ...current, news: data?.items ?? [] } : current)))
+    // 입질 시점은 장면이 정한다(걸어가기·던지기·기다리기 뒤). 장면이 멈춰 있을 때를 대비한 안전장치만 둔다
+    fishingTimer.current = window.setTimeout(() => hookFish(index), 20000)
+  }
+  const hookFish = (index) => {
+    window.clearTimeout(fishingTimer.current)
+    setFishing((current) => (current?.phase === 'cast' && (index === undefined || current.index === index)
+      ? { ...current, phase: 'caught' }
+      : current))
+  }
+  const caughtMover = fishing ? movers[fishing.index] : null
 
   // 누른 대상의 숫자, 장면에서의 의미, 관련 뉴스
   // 포리가 오늘 가 있을 곳: 실제 데이터면 오늘의 범인, 시연 중이면 가장 크게 움직인 원인
   const getFocus = () => {
+    if (fishing) return 'fishing'
     if (picked === 'chest') return 'chest'
     if (marketState === 'closed') return 'home'
     if (isUnavailable) return 'lighthouse'
@@ -269,6 +313,11 @@ function App() {
       touchPori()
       return
     }
+    if (name === 'fishing') {
+      startFishing()
+      return
+    }
+    if (fishing) stopFishing()
     setPicked(name)
   }
 
@@ -457,8 +506,15 @@ function App() {
                 fish={isUnavailable ? null : fish}
                 focus={focus}
                 onPick={pick}
-                selected={picked ?? (reaction ? 'pori' : null)}
+                selected={fishing ? 'fishing' : picked ?? (reaction ? 'pori' : null)}
                 chestNew={hasNewShell}
+                fishing={fishing && caughtMover ? {
+                  phase: fishing.phase,
+                  name: caughtMover.name,
+                  level: Math.min(1, Math.max(-1, caughtMover.changePercent / FULL_MOVER_PERCENT)),
+                  color: FISH_COLORS[fishing.index % FISH_COLORS.length],
+                } : null}
+                onFishingCaught={() => hookFish()}
               />
             ) : (
             <Pori3D marketState={marketState} touchSignal={reactionTick} waterLevel={tradingActivity} volatility={volatility}
@@ -486,7 +542,34 @@ function App() {
             </span>
           </button>
           )}
-          {picked === 'chest' ? (
+          {fishing?.phase === 'caught' && caughtMover ? (
+            <aside className="scene-info fishing-card" aria-live="polite">
+              <header>
+                <span>🎣 포리가 낚아 올렸어요</span>
+                <button type="button" onClick={stopFishing} aria-label="낚시 그만하기">✕</button>
+              </header>
+              <div className="fishing-catch">
+                <strong>{caughtMover.name}{moverMode !== 'live' && ' (예시)'}</strong>
+                <b className={caughtMover.changePercent < 0 ? 'down' : 'up'}>
+                  {caughtMover.changePercent > 0 ? '+' : ''}{caughtMover.changePercent.toFixed(2)}%
+                </b>
+              </div>
+              <p>오늘 거래가 많았던 종목 가운데 크게 움직인 녀석이에요.</p>
+              {fishing.news === undefined && <p className="fishing-wait">이 종목 소식을 찾는 중이에요…</p>}
+              {fishing.news?.length === 0 && <p className="fishing-wait">최근 이 종목 소식은 찾지 못했어요.</p>}
+              {fishing.news?.length > 0 && (
+                <ul>
+                  {fishing.news.map((item) => (
+                    <li key={item.link}>
+                      <a href={item.link} target="_blank" rel="noopener noreferrer">{item.title}</a>
+                      <small>{item.source}</small>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <button type="button" className="fishing-again" onClick={startFishing}>🎣 한 번 더 낚기</button>
+            </aside>
+          ) : picked === 'chest' ? (
             <ShellChest shells={shells} onClose={() => setPicked(null)} />
           ) : pickedInfo ? (
             <aside className="scene-info" aria-live="polite">
@@ -509,9 +592,9 @@ function App() {
             </aside>
           ) : (
             <div className={`speech ${reaction ? 'reacting' : ''}`} aria-live="polite">
-              <strong>{reaction?.title ?? scenario.title}</strong>
-              <span>{reaction?.message ?? scenario.message}</span>
-              {SCENE_MODE === 'island' && !reaction && <small className="speech-place">포리는 지금 {PLACE_LINES[focus]}</small>}
+              <strong>{fishing ? '포리가 낚싯대를 드리웠어요' : reaction?.title ?? scenario.title}</strong>
+              <span>{fishing ? '무엇이 걸릴까요? 오늘 바다에서 화제였던 녀석일 거예요.' : reaction?.message ?? scenario.message}</span>
+              {SCENE_MODE === 'island' && !reaction && !fishing && <small className="speech-place">포리는 지금 {PLACE_LINES[focus]}</small>}
             </div>
           )}
         </section>

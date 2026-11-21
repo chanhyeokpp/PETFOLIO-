@@ -1,6 +1,7 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig, loadEnv } from 'vite'
 import { fetchBriefing } from './server/briefing.js'
+import { fetchStockNews } from './server/stockNews.js'
 import { fetchKospi } from './server/kospi.js'
 import { fetchNews } from './server/news.js'
 
@@ -8,6 +9,7 @@ const API_ROUTES = {
   '/api/kospi': { load: fetchKospi, error: 'MARKET_DATA_UNAVAILABLE' },
   '/api/news': { load: fetchNews, error: 'NEWS_UNAVAILABLE' },
   '/api/briefing': { load: fetchBriefing, error: 'BRIEFING_UNAVAILABLE' },
+  '/api/stock-news': { load: fetchStockNews, error: 'STOCK_NEWS_UNAVAILABLE' },
 }
 
 // .env.local의 서버용 키(OPENAI_API_KEY, KRX_AUTH_KEY)를 API 코드가 읽을 수 있게 한다.
@@ -29,7 +31,7 @@ function kospiApi() {
 
     try {
       response.statusCode = 200
-      response.end(JSON.stringify(await route.load()))
+      response.end(JSON.stringify(await route.load(new URL(request.url, 'http://localhost').searchParams)))
     } catch (error) {
       response.statusCode = 502
       response.end(JSON.stringify({
