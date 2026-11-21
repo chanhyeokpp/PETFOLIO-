@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import {
   COLORS, POSES, WEATHER, waveHeight,
   buildBoat, buildFish, buildPori, buildWeather, buildWhale, buildZzz,
@@ -20,6 +21,8 @@ const PORI_SCALE = 0.42
 const WALK_SPEED = 1.1
 const SEA_LOW = -0.1 // quiet day: the beach is dry
 const SEA_HIGH = 0.3 // busy day: the tide covers the beach
+// height of the big swell (volatility still scales it through waveHeight); halved from 1.7 for a calmer toy sea
+const SWELL = 0.85
 
 // Where Pori stands for each story. face = which way Pori looks once there (0 = toward the front).
 const SPOTS = {
@@ -27,6 +30,7 @@ const SPOTS = {
   dock: { x: 2.7, z: 0.95, face: Math.PI / 2, name: '선착장' },
   lighthouse: { x: -0.95, z: 0.45, face: -0.35, name: '등대' },
   home: { x: 1.3, z: -0.45, face: 0.1, name: '포리 집' },
+  chest: { x: 1.75, z: -0.85, face: 0.5, name: '보물상자' },
 }
 
 const PALETTE = {
@@ -43,14 +47,62 @@ const PALETTE = {
   trunk: '#a9805a',
   daySky: '#cfe8ee',
   nightSky: '#27325e',
-  daySea: '#86cfdc',
-  nightSea: '#3d5791',
+  deepSea: '#4eaebb',
+  shallowSea: '#93d8cc',
+  foam: '#ffffff',
+  // the sea's own colours come from vertex colours; this tint darkens them at night
+  dayTint: '#ffffff',
+  nightTint: '#6f82b8',
 }
+
+// Trees, rocks and bushes from Kenney's Nature Kit (CC0, see public/models/island/CREDITS.txt).
+// The simple shapes below stand in until a model loads, and stay if loading fails.
+const MODEL_DIR = `${import.meta.env.BASE_URL}models/island/`
+// the kit's materials, by name, repainted in the island's pastel palette
+const MODEL_COLORS = {
+  leafsGreen: '#86d394',
+  grass: '#a6dc8f',
+  woodBark: '#c08c64',
+  dirt: '#b7abb2',
+  _defaultMat: '#b7abb2',
+}
+// Kenney Pirate Kit ship for the investor boats. Only its sail is repainted, so the sail colour
+// still tells foreign (coral) from institutional (blue) money. Its own flags are hidden; the
+// app's pennant (wind) and crates (buying) are moved onto the ship.
+const SHIP = {
+  model: 'ship-small',
+  scale: 0.105,
+  sink: -0.1, // the model's keel sits at y 0; lower it to the waterline
+  pennant: [-0.07, 1.08, 0],
+  crates: [[0.1, 0.32, 0.06], [0.1, 0.32, -0.09], [0.1, 0.44, -0.01]],
+  crew: [-0.3, 0.27, 0], // where the crew stands on the ship's deck (stern side)
+  crewScale: 1.6, // the crew is drawn about 0.36 tall; this makes them readable from the island view
+}
+
+const PROPS = [
+  { model: 'tree-palmbend', x: -2.55, z: 0.35, scale: 1.3, yaw: 0.6, fallback: () => buildTree(1) },
+  { model: 'tree-oak', x: -0.2, z: -2.1, scale: 1.5, yaw: 0.2, fallback: () => buildTree(1.15) },
+  { model: 'tree-fat', x: 2.45, z: -1.95, scale: 1.25, yaw: 1.1, fallback: () => buildTree(0.9) },
+  { model: 'tree-fat', x: -2.6, z: -0.6, scale: 1.05, yaw: 2.3, fallback: () => buildTree(0.8) },
+  { model: 'tree-oak', x: 0.55, z: -2.55, scale: 1.2, yaw: 3.1, fallback: () => buildTree(0.85) },
+  { model: 'tree-fat', x: -2.15, y: 1.05, z: -1.9, scale: 0.95, yaw: 0.4 },
+  { model: 'tree-palmbend', x: 2.95, z: 1.75, scale: 1.05, yaw: 2.4 },
+  { model: 'rock-largea', x: -3.3, y: 0.12, z: 1.8, scale: 0.95, yaw: 0.5, fallback: () => buildRock(0.28) },
+  { model: 'rock-largeb', x: 3.5, y: 0.12, z: -1.3, scale: 1.05, yaw: 2.0, fallback: () => buildRock(0.34) },
+  { model: 'rock-largea', x: -1.2, y: 0.12, z: 3.55, scale: 0.7, yaw: 1.2, fallback: () => buildRock(0.22) },
+  { model: 'rock-largeb', x: 2.2, y: 0.12, z: 3.1, scale: 0.65, yaw: 2.6, fallback: () => buildRock(0.2) },
+  { model: 'rock-largea', x: -3.75, y: 0.12, z: -0.6, scale: 0.9, yaw: 4.0, fallback: () => buildRock(0.3) },
+  { model: 'plant-bush', x: 0.2, z: -1.4, scale: 1.3, yaw: 0.3 },
+  { model: 'plant-bush', x: 2.2, z: -0.1, scale: 1.1, yaw: 1.9 },
+  { model: 'plant-bush', x: -0.65, z: 1.75, scale: 1.2, yaw: 3.3 },
+  { model: 'plant-bush', x: 1.95, z: -2.05, scale: 1.0, yaw: 5.0 },
+]
 
 const HOTSPOTS = [
   { key: 'pori', label: '포리 쓰다듬기', size: 72 },
   { key: 'lighthouse', label: '등대: 외해(간밤 미국 증시)와 바람 보기', size: 84 },
   { key: 'home', label: '포리 집 보기', size: 84 },
+  { key: 'chest', label: '보물상자: 모은 조개 보기', size: 70 },
   { key: 'weather', label: '날씨: 간밤 미국 증시 보기', size: 88 },
   { key: 'foreign', label: '외국인 배 보기', size: 70 },
   { key: 'institution', label: '기관 배 보기', size: 70 },
@@ -93,14 +145,54 @@ function terrace(points, top, height, topMaterial, sideMaterial) {
   return shadowed(new THREE.Mesh(geometry, [topMaterial, sideMaterial]), false)
 }
 
-// A thin white band where the water meets the land.
-function foamRing(points, inner, outer) {
-  const shape = toShape(points, outer)
-  shape.holes.push(new THREE.Path(toShape(points, inner).getPoints().reverse()))
-  const geometry = new THREE.ShapeGeometry(shape, 1)
-  geometry.rotateX(-Math.PI / 2)
-  const material = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.5, depthWrite: false })
-  return new THREE.Mesh(geometry, material)
+// Shore foam: short, uneven patches that wash up and fade away along the waterline,
+// instead of one white line around the whole island. Alpha lives in the vertex colours.
+function buildFoam(points) {
+  const count = points.length
+  const positions = new Float32Array(count * 2 * 3)
+  const colors = new Float32Array(count * 2 * 4)
+  const angles = points.map((p) => Math.atan2(p.y, p.x))
+  const foam = new THREE.Color(PALETTE.foam)
+  for (let i = 0; i < count * 2; i += 1) colors.set([foam.r, foam.g, foam.b, 0], i * 4)
+  const indices = []
+  for (let i = 0; i < count; i += 1) {
+    const a = i * 2
+    const b = ((i + 1) % count) * 2
+    indices.push(a, b, a + 1, a + 1, b, b + 1)
+  }
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 4))
+  geometry.setIndex(indices)
+  const material = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide })
+  const mesh = new THREE.Mesh(geometry, material)
+  mesh.renderOrder = 1
+  mesh.frustumCulled = false // vertices move every frame, so the initial bounds are meaningless
+  // t: time; strength: 0..1 (how much foam overall); rough: volatility
+  const update = (t, strength, rough) => {
+    for (let i = 0; i < count; i += 1) {
+      const angle = angles[i]
+      // a few patches drift slowly around the shore; each one swells in and out on its own beat
+      const patch = Math.sin(angle * 3 + t * 0.22 + Math.sin(angle * 5 - t * 0.13) * 1.4)
+      const visible = THREE.MathUtils.smoothstep(patch, 0.05 + (1 - rough) * 0.25, 0.8)
+      const wash = 0.5 + 0.5 * Math.sin(t * 0.9 + angle * 7)
+      const alpha = visible * (0.7 + wash * 0.3) * strength
+      // start just outside the terrace's rounded rim and reach a little further out as the wave washes in
+      const p = points[i]
+      const length = Math.hypot(p.x, p.y) || 1
+      const inner = 0.13 // the terrace wall stands 0.12 outside its outline
+      const outer = inner + 0.09 + wash * (0.16 + rough * 0.12) * visible
+      positions.set([
+        p.x + (p.x / length) * inner, 0, p.y + (p.y / length) * inner,
+        p.x + (p.x / length) * outer, 0, p.y + (p.y / length) * outer,
+      ], i * 6)
+      colors[i * 8 + 3] = alpha
+      colors[i * 8 + 7] = alpha * 0.45
+    }
+    geometry.attributes.position.needsUpdate = true
+    geometry.attributes.color.needsUpdate = true
+  }
+  return { mesh, material, update }
 }
 
 // A flat ribbon that follows a curve just above the grass.
@@ -214,6 +306,157 @@ function buildHouse() {
   return { group, windowMaterial }
 }
 
+// --- Crew: a neighbour on each boat, in the same soft clay as Pori ---
+// Built facing +z, about 0.36 tall. `arm` is the waving arm, `hold` the other one.
+function blob(material, sx, sy, sz, x, y, z) {
+  const mesh = shadowed(new THREE.Mesh(new THREE.SphereGeometry(1, 24, 18), material))
+  mesh.scale.set(sx, sy, sz)
+  mesh.position.set(x, y, z)
+  return mesh
+}
+function flipper(material, side, shoulderY, length) {
+  const pivot = new THREE.Group()
+  pivot.position.set(side * 0.085, shoulderY, 0.01)
+  const limb = blob(material, 0.026, length, 0.03, 0, -length * 0.8, 0)
+  pivot.add(limb)
+  pivot.rotation.z = side * 0.35
+  return pivot
+}
+
+// Foreign money: an old sea lion captain who has crossed the ocean. Bushy beard, captain's hat, spyglass.
+function buildSeaLion() {
+  const root = new THREE.Group()
+  const fur = standard('#9a7560')
+  const light = standard('#d4b59c')
+  const beard = standard('#f1ebe3')
+  const dark = standard(COLORS.dark)
+  const navy = standard('#33457a')
+  const gold = standard('#f2c45a')
+  root.add(
+    blob(fur, 0.1, 0.13, 0.09, 0, 0.13, 0),
+    blob(light, 0.065, 0.09, 0.04, 0, 0.12, 0.055),
+    blob(fur, 0.075, 0.072, 0.072, 0, 0.29, 0.005),
+    blob(light, 0.045, 0.033, 0.035, 0, 0.275, 0.06),
+    blob(dark, 0.014, 0.011, 0.01, 0, 0.29, 0.095),
+    blob(dark, 0.011, 0.011, 0.008, -0.03, 0.315, 0.06),
+    blob(dark, 0.011, 0.011, 0.008, 0.03, 0.315, 0.06),
+  )
+  // the beard: a bushy cluster under the muzzle
+  for (const [x, y, z, r] of [[-0.035, 0.245, 0.055, 0.032], [0.035, 0.245, 0.055, 0.032], [0, 0.23, 0.07, 0.036], [-0.018, 0.21, 0.06, 0.028], [0.018, 0.21, 0.06, 0.028], [0, 0.255, 0.08, 0.026]]) {
+    root.add(blob(beard, r, r, r * 0.9, x, y, z))
+  }
+  const crown = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.058, 0.066, 0.045, 20), navy))
+  crown.position.y = 0.36
+  const brim = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.01, 20), navy))
+  brim.position.set(0, 0.338, 0.012)
+  const badge = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.02, 0.01), gold))
+  badge.position.set(0, 0.362, 0.064)
+  root.add(crown, brim, badge)
+  const arm = flipper(fur, 1, 0.2, 0.065)
+  const hold = flipper(fur, -1, 0.2, 0.065)
+  const spyglass = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.015, 0.11, 12), gold))
+  spyglass.rotation.x = Math.PI / 2
+  spyglass.position.set(0, -0.1, 0.04)
+  hold.add(spyglass)
+  root.add(arm, hold)
+  return { root, arm, hold }
+}
+
+// Institutional money: a penguin in a suit. Glasses, tie and a briefcase.
+function buildPenguin() {
+  const root = new THREE.Group()
+  const black = standard('#2f3440')
+  const white = standard('#fbf8f2')
+  const orange = standard('#ffa24c')
+  const tie = standard('#5b7fd6')
+  const frame = standard('#3b2f2d')
+  const leather = standard('#9a6a43')
+  root.add(
+    blob(black, 0.1, 0.14, 0.09, 0, 0.14, 0),
+    blob(white, 0.072, 0.11, 0.04, 0, 0.13, 0.058),
+    blob(black, 0.068, 0.066, 0.066, 0, 0.3, 0),
+    blob(white, 0.048, 0.04, 0.025, 0, 0.3, 0.05),
+    blob(frame, 0.01, 0.01, 0.008, -0.022, 0.31, 0.072),
+    blob(frame, 0.01, 0.01, 0.008, 0.022, 0.31, 0.072),
+    blob(orange, 0.028, 0.012, 0.018, -0.03, 0.006, 0.04),
+    blob(orange, 0.028, 0.012, 0.018, 0.03, 0.006, 0.04),
+  )
+  const beak = shadowed(new THREE.Mesh(new THREE.ConeGeometry(0.016, 0.045, 12), orange))
+  beak.rotation.x = Math.PI / 2
+  beak.position.set(0, 0.29, 0.09)
+  root.add(beak)
+  for (const side of [-1, 1]) {
+    const lens = shadowed(new THREE.Mesh(new THREE.TorusGeometry(0.019, 0.004, 8, 20), frame))
+    lens.position.set(side * 0.022, 0.31, 0.078)
+    root.add(lens)
+  }
+  const knot = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.018, 0.012), tie))
+  knot.position.set(0, 0.215, 0.095)
+  const blade = shadowed(new THREE.Mesh(new THREE.ConeGeometry(0.018, 0.07, 4), tie))
+  blade.rotation.set(Math.PI, Math.PI / 4, 0)
+  blade.scale.z = 0.4
+  blade.position.set(0, 0.17, 0.097)
+  root.add(knot, blade)
+  const arm = flipper(black, 1, 0.21, 0.07)
+  const hold = flipper(black, -1, 0.21, 0.07)
+  const briefcase = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.055, 0.022), leather))
+  briefcase.position.set(0, -0.14, 0.02)
+  const handle = shadowed(new THREE.Mesh(new THREE.TorusGeometry(0.012, 0.003, 6, 12, Math.PI), frame))
+  handle.position.set(0, -0.11, 0.02)
+  hold.add(briefcase, handle)
+  root.add(arm, hold)
+  return { root, arm, hold }
+}
+
+// Pori's treasure chest by the house: the lid opens when tapped, and a star twinkles over it
+// when a new shell is waiting.
+const CHEST_SPOT = { x: 2.3, z: -1.2 }
+function buildChest() {
+  const group = new THREE.Group()
+  const wood = standard('#c98f5a')
+  const gold = standard('#ffd36b', { emissive: '#ffb020', emissiveIntensity: 0.15 })
+  const base = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.26, 0.32), wood))
+  base.position.y = 0.13
+  group.add(base)
+  for (const x of [-0.16, 0.16]) {
+    const band = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.27, 0.33), gold))
+    band.position.set(x, 0.135, 0)
+    group.add(band)
+  }
+  // the lid hinges along the back edge
+  const lid = new THREE.Group()
+  lid.position.set(0, 0.26, -0.16)
+  const dome = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.46, 20, 1, false, 0, Math.PI), wood))
+  dome.rotation.set(0, 0, Math.PI / 2)
+  dome.scale.set(1, 1, 1)
+  dome.position.set(0, 0, 0.16)
+  lid.add(dome)
+  for (const x of [-0.16, 0.16]) {
+    const band = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.165, 0.165, 0.05, 20, 1, false, 0, Math.PI), gold))
+    band.rotation.set(0, 0, Math.PI / 2)
+    band.position.set(x, 0, 0.16)
+    lid.add(band)
+  }
+  const lock = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.09, 0.03), gold))
+  lock.position.set(0, -0.02, 0.33)
+  lid.add(lock)
+  group.add(lid)
+  // pearls inside, seen when the lid is open
+  const pearl = standard('#fff3f6', { emissive: '#ffd6e4', emissiveIntensity: 0.25 })
+  for (const [x, z] of [[-0.1, 0.02], [0.05, -0.05], [0.12, 0.06], [-0.02, 0.08]]) {
+    const bead = new THREE.Mesh(new THREE.SphereGeometry(0.045, 14, 10), pearl)
+    bead.position.set(x, 0.27, z)
+    group.add(bead)
+  }
+  const sparkle = new THREE.Mesh(
+    new THREE.OctahedronGeometry(0.07),
+    new THREE.MeshStandardMaterial({ color: '#fff4c4', emissive: '#ffd24a', emissiveIntensity: 0.9 }),
+  )
+  sparkle.position.y = 0.72
+  group.add(sparkle)
+  return { group, lid, sparkle, open: 0 }
+}
+
 function buildDock() {
   const group = new THREE.Group()
   const wood = standard(PALETTE.wood)
@@ -234,29 +477,83 @@ function buildDock() {
   return group
 }
 
+// Small, slow ripples as a tiling normal map: every term has whole cycles across the tile, so it repeats seamlessly.
+function rippleNormalMap(size = 256) {
+  const waves = [
+    [3, 1, 0.5, 0.2], [-2, 3, 0.5, 1.7], [1, -4, 0.45, 2.9], [-4, -2, 0.4, 4.1], [5, 3, 0.3, 0.7],
+    [-3, 5, 0.3, 5.3], [6, -1, 0.25, 3.3], [-1, -6, 0.25, 1.1], [4, -5, 0.2, 2.2], [-6, 4, 0.2, 4.8],
+    [7, 5, 0.15, 0.4], [-5, -7, 0.15, 3.9],
+  ]
+  const image = new ImageData(size, size)
+  for (let py = 0; py < size; py += 1) {
+    for (let px = 0; px < size; px += 1) {
+      const u = px / size
+      const v = py / size
+      let du = 0
+      let dv = 0
+      for (const [kx, ky, amp, phase] of waves) {
+        const c = Math.cos(Math.PI * 2 * (kx * u + ky * v) + phase) * amp * Math.PI * 2
+        du += c * kx
+        dv += c * ky
+      }
+      const n = new THREE.Vector3(-du * 0.02, -dv * 0.02, 1).normalize()
+      const index = (py * size + px) * 4
+      image.data[index] = (n.x * 0.5 + 0.5) * 255
+      image.data[index + 1] = (n.y * 0.5 + 0.5) * 255
+      image.data[index + 2] = (n.z * 0.5 + 0.5) * 255
+      image.data[index + 3] = 255
+    }
+  }
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  canvas.getContext('2d').putImageData(image, 0, 0)
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.wrapS = THREE.RepeatWrapping
+  texture.wrapT = THREE.RepeatWrapping
+  texture.repeat.set(9, 9)
+  return texture
+}
+
+// An opaque teal sea: mint where it is shallow by the island, deeper teal further out,
+// with fine moving ripples. Opaque so the island's underwater sides no longer show through.
 function buildSea() {
   const geometry = new THREE.PlaneGeometry(60, 60, 110, 110)
   geometry.rotateX(-Math.PI / 2)
+  const base = geometry.attributes.position.array.slice()
+  const count = geometry.attributes.position.count
+  const shelter = new Float32Array(count)
+  const colors = new Float32Array(count * 3)
+  const deep = new THREE.Color(PALETTE.deepSea)
+  const shallow = new THREE.Color(PALETTE.shallowSea)
+  const mixed = new THREE.Color()
+  for (let i = 0; i < count; i += 1) {
+    const r = Math.hypot(base[i * 3], base[i * 3 + 2])
+    // the island shelters the water right around it, so waves never wash over the grass
+    shelter[i] = THREE.MathUtils.smoothstep(r, 3.0, 5.5)
+    mixed.lerpColors(shallow, deep, THREE.MathUtils.smoothstep(r, 3.9, 6.4))
+    colors.set([mixed.r, mixed.g, mixed.b], i * 3)
+  }
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3))
+  const normalMap = rippleNormalMap()
   const material = new THREE.MeshStandardMaterial({
-    color: PALETTE.daySea, roughness: 0.28, metalness: 0.05, transparent: true, opacity: 0.84,
+    color: PALETTE.dayTint, vertexColors: true, roughness: 0.62, metalness: 0,
+    normalMap, normalScale: new THREE.Vector2(0.2, 0.2),
   })
   const mesh = new THREE.Mesh(geometry, material)
   mesh.receiveShadow = true
-  const base = geometry.attributes.position.array.slice()
-  // the island shelters the water right around it, so waves never wash over the grass
-  const shelter = new Float32Array(geometry.attributes.position.count)
-  for (let i = 0; i < shelter.length; i += 1) {
-    shelter[i] = THREE.MathUtils.smoothstep(Math.hypot(base[i * 3], base[i * 3 + 2]), 3.0, 5.5)
-  }
   const update = (level, t, rough) => {
     const position = geometry.attributes.position
     for (let i = 0; i < position.count; i += 1) {
       const x = base[i * 3]
       const z = base[i * 3 + 2]
-      position.array[i * 3 + 1] = level + waveHeight(x * 0.75, z * 0.75, t, rough) * 1.7 * (0.15 + shelter[i] * 0.85)
+      position.array[i * 3 + 1] = level + waveHeight(x * 0.75, z * 0.75, t, rough) * SWELL * (0.15 + shelter[i] * 0.85)
     }
     position.needsUpdate = true
     geometry.computeVertexNormals()
+    // ripples drift slowly, a little faster on a choppy day
+    normalMap.offset.set(t * 0.006, t * 0.004)
+    material.normalScale.setScalar(0.18 + rough * 0.17)
   }
   return { mesh, material, update }
 }
@@ -267,6 +564,8 @@ export default function PoriIsland({
   focus = 'shore', onPick = null,
   // what the user tapped: the camera moves in on it
   selected = null,
+  // a new shell is waiting in the treasure chest
+  chestNew = false,
 }) {
   const hostRef = useRef(null)
   const hotspotRefs = useRef({})
@@ -276,7 +575,7 @@ export default function PoriIsland({
   useEffect(() => {
     dataRef.current = {
       marketState, waterLevel, volatility, foreign: foreignFlow, institution: institutionFlow,
-      overnight, wind, samsung, hynix, fish, focus, selected,
+      overnight, wind, samsung, hynix, fish, focus, selected, chestNew,
     }
   })
 
@@ -354,18 +653,62 @@ export default function PoriIsland({
     house.group.rotation.y = -0.25
     const dock = buildDock()
     dock.position.set(2.85, GROUND_Y + 0.02, SPOTS.dock.z)
-    scene.add(lighthouse.group, house.group, dock)
-    for (const [x, z, s] of [[-2.55, 0.35, 1], [-0.2, -2.1, 1.15], [2.55, -0.55, 0.9], [-2.6, -0.6, 0.8], [0.55, -2.55, 0.85]]) {
-      const tree = buildTree(s)
-      tree.position.set(x, GROUND_Y, z)
-      scene.add(tree)
-    }
-    for (const [x, z, s] of [[-3.3, 1.8, 0.28], [3.5, -1.3, 0.34], [-1.2, 3.55, 0.22], [2.2, 3.1, 0.2], [-3.75, -0.6, 0.3]]) {
-      const stone = buildRock(s)
-      stone.position.set(x, 0.12, z)
-      stone.rotation.y = x * 1.7
-      scene.add(stone)
-    }
+    const chest = buildChest()
+    chest.group.position.set(CHEST_SPOT.x, GROUND_Y, CHEST_SPOT.z)
+    chest.group.rotation.y = -0.35
+    scene.add(lighthouse.group, house.group, dock, chest.group)
+    // trees, rocks and bushes: simple shapes first, swapped for the kit's models once they load
+    const propSlots = PROPS.map((prop) => {
+      const slot = new THREE.Group()
+      slot.position.set(prop.x, prop.y ?? GROUND_Y, prop.z)
+      slot.rotation.y = prop.yaw
+      const fallback = prop.fallback?.() ?? null
+      if (fallback) slot.add(fallback)
+      scene.add(slot)
+      return { prop, slot, fallback }
+    })
+    let unmounted = false
+    const modelLoader = new GLTFLoader()
+    const modelNames = [...new Set(PROPS.map((prop) => prop.model))]
+    Promise.all(modelNames.map((name) => modelLoader.loadAsync(`${MODEL_DIR}${name}.glb`)
+      .then((gltf) => [name, gltf.scene], () => [name, null])))
+      .then((entries) => {
+        const models = Object.fromEntries(entries)
+        const painted = {}
+        const repaint = (material) => {
+          painted[material.name] ??= new THREE.MeshStandardMaterial({
+            color: MODEL_COLORS[material.name] ?? material.color, roughness: 0.9, flatShading: true,
+          })
+          return painted[material.name]
+        }
+        Object.values(models).forEach((root) => root?.traverse((node) => {
+          if (!node.isMesh) return
+          const original = Array.isArray(node.material) ? node.material : [node.material]
+          node.material = Array.isArray(node.material) ? original.map(repaint) : repaint(node.material)
+          original.forEach((material) => material.dispose())
+          node.castShadow = true
+          node.receiveShadow = true
+        }))
+        if (unmounted) {
+          Object.values(models).forEach((root) => root?.traverse((node) => node.geometry?.dispose()))
+          Object.values(painted).forEach((material) => material.dispose())
+          return
+        }
+        propSlots.forEach(({ prop, slot, fallback }) => {
+          const model = models[prop.model]
+          if (!model) return
+          if (fallback) {
+            slot.remove(fallback)
+            fallback.traverse((node) => {
+              node.geometry?.dispose()
+              node.material?.dispose?.()
+            })
+          }
+          const copy = model.clone(true)
+          copy.scale.setScalar(prop.scale)
+          slot.add(copy)
+        })
+      })
     const flowerColors = ['#ff9fb2', '#ffd36b', '#ffffff']
     for (let i = 0; i < 9; i += 1) {
       const flower = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), standard(flowerColors[i % 3]))
@@ -376,11 +719,13 @@ export default function PoriIsland({
     // --- the sea ---
     const sea = buildSea()
     scene.add(sea.mesh)
-    const beachFoam = foamRing(beachOutline, 0.99, 1.06)
-    const grassFoam = foamRing(grassOutline, 0.99, 1.07)
-    scene.add(beachFoam, grassFoam)
-    const daySea = new THREE.Color(PALETTE.daySea)
-    const nightSea = new THREE.Color(PALETTE.nightSea)
+    // thin foam lines where the water meets the beach (low tide) or the grass (high tide)
+    // shore foam sits on the beach edge at low tide and on the grass edge at high tide
+    const beachFoam = buildFoam(beachOutline)
+    const grassFoam = buildFoam(grassOutline)
+    scene.add(beachFoam.mesh, grassFoam.mesh)
+    const dayTint = new THREE.Color(PALETTE.dayTint)
+    const nightTint = new THREE.Color(PALETTE.nightTint)
 
     // --- Pori ---
     const pori = buildPori()
@@ -390,13 +735,55 @@ export default function PoriIsland({
 
     // --- boats: berths on either side of the dock; sellers sail out into the fog ---
     const boats = [
-      { ...buildBoat('#ff8f7d'), key: 'foreign', berth: { x: 4.05, z: SPOTS.dock.z - 0.62 }, away: { x: 12, z: -4 } },
-      { ...buildBoat('#6fa8f5'), key: 'institution', berth: { x: 4.05, z: SPOTS.dock.z + 0.62 }, away: { x: 11, z: 7 } },
+      { ...buildBoat('#ff8f7d'), sailColor: '#ff8f7d', key: 'foreign', berth: { x: 4.15, z: SPOTS.dock.z - 0.72 }, away: { x: 12, z: -4 } },
+      { ...buildBoat('#6fa8f5'), sailColor: '#6fa8f5', key: 'institution', berth: { x: 4.15, z: SPOTS.dock.z + 0.72 }, away: { x: 11, z: 7 } },
     ]
     boats.forEach((boat) => {
       boat.heading = Math.PI
+      boat.crew = boat.key === 'foreign' ? buildSeaLion() : buildPenguin()
+      boat.crew.root.position.set(-0.12, 0.13, 0) // on the clay boat's deck until the ship loads
+      boat.crew.turn = 2.0
+      boat.crew.baseY = 0.13
+      boat.crew.root.scale.setScalar(SHIP.crewScale)
+      boat.tilt.add(boat.crew.root)
       scene.add(boat.outer)
     })
+    // swap the clay hull and sail for the ship model once it loads (the clay boat stays if it fails)
+    new GLTFLoader().loadAsync(`${MODEL_DIR}${SHIP.model}.glb`).then((gltf) => {
+      if (unmounted) {
+        gltf.scene.traverse((node) => {
+          node.geometry?.dispose()
+          node.material?.map?.dispose()
+          node.material?.dispose?.()
+        })
+        return
+      }
+      boats.forEach((boat) => {
+        const ship = gltf.scene.clone(true)
+        ship.traverse((node) => {
+          if (!node.isMesh) return
+          node.castShadow = true
+          node.receiveShadow = true
+          if (node.name.startsWith('flag')) node.visible = false
+          if (node.name.startsWith('sail')) {
+            node.material = node.material.clone()
+            node.material.color.set(boat.sailColor)
+          }
+        })
+        ship.rotation.y = Math.PI / 2 // the model's bow is +z; the boat's is +x
+        ship.scale.setScalar(SHIP.scale)
+        ship.position.y = SHIP.sink
+        boat.tilt.children.forEach((child) => {
+          if (child !== boat.pennant && child !== boat.crew.root && !boat.crates.includes(child)) child.visible = false
+        })
+        boat.tilt.add(ship)
+        boat.pennant.position.set(...SHIP.pennant)
+        boat.pennant.scale.setScalar(1.8)
+        boat.crates.forEach((crate, index) => crate.position.set(...SHIP.crates[index]))
+        boat.crew.root.position.set(...SHIP.crew)
+        boat.crew.baseY = SHIP.crew[1]
+      })
+    }, () => {})
 
     // --- whales (heavyweight stocks) and fish (today's movers) in the water in front ---
     const whales = [
@@ -455,6 +842,15 @@ export default function PoriIsland({
       if (name === 'pori') return zoomPoint.set(walker.x, GROUND_Y + 0.5, walker.z)
       if (name === 'lighthouse' || name === 'weather') return zoomPoint.set(-0.6, 2.0, -1.4)
       if (name === 'home') return zoomPoint.set(1.45, GROUND_Y + 0.4, -1.35)
+      if (name === 'chest') {
+        // the shell list covers the right side (or the bottom on a phone), so frame the chest off-centre
+        if (camera.aspect < 1) return zoomPoint.set(CHEST_SPOT.x - 0.2, GROUND_Y - 0.5, CHEST_SPOT.z)
+        return zoomPoint.set(
+          CHEST_SPOT.x - 0.2 + Math.cos(view.yaw) * 0.9,
+          GROUND_Y + 0.3,
+          CHEST_SPOT.z - Math.sin(view.yaw) * 0.9,
+        )
+      }
       const boat = boats.find((item) => item.key === name)
       if (boat) return zoomPoint.copy(boat.outer.position).setY(seaLevel + 0.3)
       const whale = whales.find((item) => item.key === name)
@@ -559,13 +955,11 @@ export default function PoriIsland({
       waveTime += dt * (1 + rough * 0.9) * motion
       sea.update(seaLevel, waveTime, rough)
       const beachWet = THREE.MathUtils.smoothstep(seaLevel, 0.08, 0.2)
-      beachFoam.position.y = seaLevel + 0.03
-      grassFoam.position.y = seaLevel + 0.03
-      beachFoam.material.opacity = (1 - beachWet) * (0.35 + rough * 0.45 + Math.sin(now * 1.6) * 0.08 * motion)
-      grassFoam.material.opacity = beachWet * (0.35 + rough * 0.45 + Math.sin(now * 1.6) * 0.08 * motion)
-      const foamPulse = 1 + Math.sin(now * 1.3) * 0.006 * motion * (1 + rough * 2)
-      beachFoam.scale.set(foamPulse, 1, foamPulse)
-      grassFoam.scale.set(foamPulse, 1, foamPulse)
+      beachFoam.mesh.position.y = seaLevel + 0.03
+      grassFoam.mesh.position.y = seaLevel + 0.03
+      const foamTime = motion ? now : 0
+      beachFoam.update(foamTime, (1 - beachWet) * (0.75 + rough * 0.25), rough)
+      grassFoam.update(foamTime, beachWet * (0.75 + rough * 0.25), rough)
 
       windLevel = damp(windLevel, THREE.MathUtils.clamp(input.wind ?? 0, -1, 1), 1.5, dt)
       const windStrength = Math.abs(windLevel)
@@ -688,8 +1082,8 @@ export default function PoriIsland({
         const inward = Math.atan2(-(boat.berth.z - boat.away.z), boat.berth.x - boat.away.x)
         const headingTarget = boat.flow >= -0.08 ? (arrive > 0.9 ? Math.PI : inward) : inward + Math.PI
         boat.heading = dampAngle(boat.heading, headingTarget, 2, dt)
-        const slope = (waveHeight(x * 0.75 + 0.3, z * 0.75, waveTime, rough) - waveHeight(x * 0.75 - 0.3, z * 0.75, waveTime, rough)) * 1.7 / 0.6
-        boat.outer.position.set(x, seaLevel + waveHeight(x * 0.75, z * 0.75, waveTime, rough) * 1.7 - 0.02, z)
+        const slope = (waveHeight(x * 0.75 + 0.3, z * 0.75, waveTime, rough) - waveHeight(x * 0.75 - 0.3, z * 0.75, waveTime, rough)) * SWELL / 0.6
+        boat.outer.position.set(x, seaLevel + waveHeight(x * 0.75, z * 0.75, waveTime, rough) * SWELL - 0.02, z)
         boat.outer.rotation.y = boat.heading
         boat.outer.scale.setScalar(1.25)
         boat.tilt.rotation.z = Math.atan(slope) * 0.6 + Math.sin(now * 1.9 + boat.berth.z) * 0.035 * motion
@@ -700,6 +1094,22 @@ export default function PoriIsland({
         })
         boat.pennant.rotation.y = (windDirection < 0 ? Math.PI : 0) - boat.heading
         boat.pennant.rotation.z = -(1 - windStrength) * 1.25 + Math.sin(now * 9 + boat.berth.z) * 0.14 * windStrength * motion
+
+        // crew: buyers turn toward the island and the viewer and wave; sellers face the bow as the
+        // ship heads out to sea, showing their backs. (Boat-local +x is the bow; the camera is off
+        // the moored boats' -z side, so 3π/4 is "bow-ward, turned to the viewer".)
+        const crew = boat.crew
+        const buying = boat.flow > 0.15
+        const selling = boat.flow < -0.15
+        crew.turn = dampAngle(crew.turn, buying ? 2.35 : selling ? Math.PI / 2 : 2.0, 3, dt)
+        crew.root.rotation.y = crew.turn
+        crew.root.rotation.x = selling ? 0.18 : 0
+        crew.root.position.y = crew.baseY
+          + (buying ? Math.abs(Math.sin(now * 3.2 + boat.berth.z)) * 0.025 * motion : 0)
+        crew.arm.rotation.z = buying ? 2.3 + Math.sin(now * 7 + boat.berth.z) * 0.45 * motion : selling ? 0.15 : 0.35
+        // the other arm: spyglass raised / briefcase held up on a good day, hugged close on a bad one
+        crew.hold.rotation.z = buying ? -0.9 : selling ? -0.05 : -0.35
+        crew.hold.rotation.x = selling ? -0.5 : 0
       })
 
       // --- whales and fish ---
@@ -707,7 +1117,7 @@ export default function PoriIsland({
         item.shown = damp(item.shown, Number.isFinite(raw) ? 1 : 0, 4, dt)
         item.level = damp(item.level, THREE.MathUtils.clamp(raw ?? 0, -1, 1), 1.4, dt)
         const mood = item.level
-        const surface = seaLevel + waveHeight(item.x * 0.75, item.z * 0.75, waveTime, rough) * 1.7
+        const surface = seaLevel + waveHeight(item.x * 0.75, item.z * 0.75, waveTime, rough) * SWELL
         let hop = 0
         let pitch = mood < 0 ? mood * 0.5 : 0
         if (mood > 0.2 && motion) {
@@ -721,7 +1131,7 @@ export default function PoriIsland({
         item.pitch = damp(item.pitch, pitch, 9, dt)
         item.outer.position.set(
           item.x + Math.sin(now * 0.6 + index * 2) * 0.08 * motion,
-          Math.max(floor, surface - 0.06 + (mood < 0 ? mood * depthSize : 0)) + item.hop,
+          Math.max(floor, surface + 0.02 + (mood < 0 ? mood * depthSize : 0)) + item.hop,
           item.z,
         )
         item.outer.visible = item.shown > 0.02
@@ -730,7 +1140,7 @@ export default function PoriIsland({
         return mood
       }
       whales.forEach((whale, index) => {
-        const mood = swimmer(whale, input[whale.key], index, { hopSize: 0.9, depthSize: 0.7, floor: -0.9 })
+        const mood = swimmer(whale, input[whale.key], index, { hopSize: 0.9, depthSize: 0.32, floor: -0.9 })
         whale.spout = damp(whale.spout, mood > 0.2 ? 1 : 0, 5, dt)
         whale.drops.forEach((drop, dropIndex) => {
           const phase = motion ? (now * 0.9 + dropIndex / 3) % 1 : dropIndex / 3
@@ -742,7 +1152,7 @@ export default function PoriIsland({
         const entry = input.fish?.[index]
         if (entry?.name) item.label.setText(entry.name)
         item.size = 2.0
-        swimmer(item, entry?.name ? entry.level : null, index + 2, { hopSize: 0.6, depthSize: 0.45, floor: -0.7 })
+        swimmer(item, entry?.name ? entry.level : null, index + 2, { hopSize: 0.6, depthSize: 0.18, floor: -0.7 })
         item.tail.rotation.y = Math.sin(now * 7 + index) * 0.45 * motion
       })
 
@@ -752,6 +1162,11 @@ export default function PoriIsland({
       lighthouse.glass.emissiveIntensity = 0.25 + night * 1.6
       lighthouse.haloMaterial.opacity = night * (0.22 + Math.sin(now * 1.8) * 0.06 * motion)
       house.windowMaterial.emissiveIntensity = night * 1.2
+      chest.open = damp(chest.open, input.selected === 'chest' ? 1 : 0, 6, dt)
+      chest.lid.rotation.x = -chest.open * 1.9
+      chest.sparkle.visible = Boolean(input.chestNew) && chest.open < 0.5
+      chest.sparkle.rotation.y = now * 2 * motion
+      chest.sparkle.position.y = 0.72 + Math.sin(now * 2.6) * 0.05 * motion
 
       streaks.forEach((streak, index) => {
         streak.phase = (streak.phase + dt * (0.08 + windStrength * 0.35) * motion) % 1
@@ -799,7 +1214,7 @@ export default function PoriIsland({
       // --- night ---
       skyColor.lerpColors(daySky, nightSky, night)
       scene.fog.color.copy(skyColor)
-      sea.material.color.lerpColors(daySea, nightSea, night)
+      sea.material.color.lerpColors(dayTint, nightTint, night)
       hemi.intensity = 1.6 - night * 0.7
       key.intensity = 1.55 - night * 0.9
       zzz.root.visible = night > 0.02
@@ -831,6 +1246,7 @@ export default function PoriIsland({
       placeHotspot('pori', walker.x, GROUND_Y + 0.45, walker.z, true)
       placeHotspot('lighthouse', -1.6, 1.85, -1.4, true)
       placeHotspot('home', 1.45, GROUND_Y + 0.5, -1.35, true)
+      placeHotspot('chest', CHEST_SPOT.x, GROUND_Y + 0.2, CHEST_SPOT.z, true)
       placeHotspot('weather', weather.root.position.x, weather.root.position.y, weather.root.position.z, Number.isFinite(usLevel) && ['rise', 'flat', 'fall'].includes(state))
       boats.forEach((boat) => placeHotspot(boat.key, boat.outer.position.x, boat.outer.position.y + 0.4, boat.outer.position.z, true))
       whales.forEach((whale) => placeHotspot(whale.key, whale.outer.position.x, whale.outer.position.y + 0.15, whale.outer.position.z, whale.shown > 0.5))
@@ -841,6 +1257,7 @@ export default function PoriIsland({
     tick()
 
     return () => {
+      unmounted = true
       cancelAnimationFrame(frame)
       resizeObserver.disconnect()
       host.removeEventListener('pointerdown', onPointerDown)

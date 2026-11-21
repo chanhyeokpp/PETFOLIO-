@@ -5,6 +5,8 @@ import { getMarket } from './domain/markets'
 import { SENTIMENTS } from './domain/news'
 import MarketSelect from './screens/MarketSelect'
 import NewsBriefing from './screens/NewsBriefing'
+import ShellChest from './ShellChest'
+import { markShellsSeen, readSeenDay, readShells, saveShell, shellFromBriefing } from './domain/shells'
 import './App.css'
 
 const Pori3D = lazy(() => import('./Pori3D'))
@@ -20,6 +22,7 @@ const PLACE_LINES = {
   lighthouse: '등대에서 외해를 바라보고 있어요',
   shore: '물가에서 고래와 물고기를 보고 있어요',
   home: '집에서 쉬고 있어요',
+  chest: '보물상자를 열어 보여주고 있어요',
 }
 
 const PORI_REACTIONS = {
@@ -98,6 +101,8 @@ function App() {
   const [reactionTick, setReactionTick] = useState(0)
   // 장면에서 누른 것(배, 날씨, 고래). null이면 말풍선을 보여준다.
   const [picked, setPicked] = useState(null)
+  const [storedShells] = useState(readShells)
+  const [shellsSeenDay, setShellsSeenDay] = useState(readSeenDay)
   const reactionTimer = useRef(null)
   const marketState = scenario.state ?? getMarketState(scenario.changeRate)
   const isUnavailable = marketState === 'loading' || marketState === 'error'
@@ -225,6 +230,7 @@ function App() {
   // 누른 대상의 숫자, 장면에서의 의미, 관련 뉴스
   // 포리가 오늘 가 있을 곳: 실제 데이터면 오늘의 범인, 시연 중이면 가장 크게 움직인 원인
   const getFocus = () => {
+    if (picked === 'chest') return 'chest'
     if (marketState === 'closed') return 'home'
     if (isUnavailable) return 'lighthouse'
     const allLive = dataMode === 'live' && causeMode === 'live' && flowMode === 'live'
@@ -239,7 +245,26 @@ function App() {
   }
   const focus = getFocus()
 
+  // 장이 열린 날, 실제 브리핑이 오면 그날의 조개가 보물상자에 들어간다
+  const todayShell = dataMode === 'live' && briefing && marketState !== 'closed' && Number.isFinite(scenario.changeRate)
+    ? shellFromBriefing(getTodayKst(), briefing, scenario.changeRate, marketState)
+    : null
+  const shells = todayShell ? { ...storedShells, [todayShell.day]: todayShell } : storedShells
+  const todayShellKey = todayShell ? `${todayShell.day}|${todayShell.generatedAt}` : null
+  useEffect(() => {
+    // 브라우저 저장소에 남겨두기 (화면은 위에서 이미 반영)
+    if (todayShell) saveShell(todayShell)
+    // todayShell은 매 렌더 새로 만들어지므로 내용이 바뀔 때만 저장
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todayShellKey])
+  const latestShellDay = Object.keys(shells).sort().at(-1) ?? null
+  const hasNewShell = latestShellDay !== null && latestShellDay !== shellsSeenDay
+
   const pick = (name) => {
+    if (name === 'chest' && latestShellDay) {
+      markShellsSeen(latestShellDay)
+      setShellsSeenDay(latestShellDay)
+    }
     if (name === 'pori') {
       touchPori()
       return
@@ -283,9 +308,9 @@ function App() {
     if (picked === 'home') {
       return {
         title: '포리 집',
-        value: '준비 중',
+        value: marketState === 'closed' ? '쉬는 중' : '',
         tone: '',
-        lines: ['포리가 주워 온 조개를 모아두는 곳이에요. 조개 목걸이는 곧 만들어질 거예요.'],
+        lines: ['포리가 사는 집이에요. 옆의 보물상자에 그동안 주워 온 조개를 모아둬요.'],
         news: [],
       }
     }
@@ -433,6 +458,7 @@ function App() {
                 focus={focus}
                 onPick={pick}
                 selected={picked ?? (reaction ? 'pori' : null)}
+                chestNew={hasNewShell}
               />
             ) : (
             <Pori3D marketState={marketState} touchSignal={reactionTick} waterLevel={tradingActivity} volatility={volatility}
@@ -460,7 +486,9 @@ function App() {
             </span>
           </button>
           )}
-          {pickedInfo ? (
+          {picked === 'chest' ? (
+            <ShellChest shells={shells} onClose={() => setPicked(null)} />
+          ) : pickedInfo ? (
             <aside className="scene-info" aria-live="polite">
               <header>
                 <span>{pickedInfo.title}</span>
