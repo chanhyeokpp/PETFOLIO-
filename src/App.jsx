@@ -13,7 +13,15 @@ const Pori3D = lazy(() => import('./Pori3D'))
 const PoriIsland = lazy(() => import('./PoriIsland'))
 
 // 기본은 섬 장면. 주소 끝에 ?scene=sea 를 붙이면 예전 바다 단면 장면으로 볼 수 있다.
-const SCENE_MODE = new URLSearchParams(window.location.search).get('scene') === 'sea' ? 'sea' : 'island'
+const URL_PARAMS = new URLSearchParams(window.location.search)
+const SCENE_MODE = URL_PARAMS.get('scene') === 'sea' ? 'sea' : 'island'
+// 발표·캡처용 주소 옵션 (README의 "발표·캡처용 주소" 참고)
+//   ?screen=select|news|scene   처음 보여줄 화면
+//   ?demo=rise|flat|fall|closed  시장 상태를 고정 (수급·원인·화제 종목은 실제 데이터 그대로)
+//   ?open=chest|fishing|samsung… 섬이 뜨고 잠시 뒤 그 대상을 누른 상태로
+const SCREEN_PARAM = ['select', 'news', 'scene'].includes(URL_PARAMS.get('screen')) ? URL_PARAMS.get('screen') : null
+const DEMO_PARAM = ['rise', 'flat', 'fall', 'closed'].includes(URL_PARAMS.get('demo')) ? URL_PARAMS.get('demo') : null
+const OPEN_PARAM = URL_PARAMS.get('open')
 
 // 오늘 이야기의 분류 → 포리가 가 있는 곳
 const PLACE_BY_TAG = { flow: 'dock', us: 'lighthouse', fx: 'lighthouse', leader: 'shore', stock: 'shore' }
@@ -48,6 +56,7 @@ const getTodayKst = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seo
 
 // first visit → pick a market; first visit of the day → news; otherwise straight to the scene
 const getInitialScreen = () => {
+  if (SCREEN_PARAM) return SCREEN_PARAM
   if (!getMarket(readStored(STORAGE_KEYS.market))?.available) return 'select'
   return readStored(STORAGE_KEYS.newsSeen) === getTodayKst() ? 'scene' : 'news'
 }
@@ -133,7 +142,7 @@ function App() {
         minute: '2-digit',
       }).format(new Date(data.marketTime))
 
-      setScenario({
+      setScenario(DEMO_PARAM ? DEMO_SCENARIOS[DEMO_PARAM] : {
         ...copy,
         key: 'live',
         label: '실제 KOSPI',
@@ -174,9 +183,9 @@ function App() {
       } else {
         setDayRangeMode('demo')
       }
-      setDataMode('live')
+      setDataMode(DEMO_PARAM ? 'demo' : 'live')
     } catch {
-      setScenario({
+      setScenario(DEMO_PARAM ? DEMO_SCENARIOS[DEMO_PARAM] : {
         ...DEMO_SCENARIOS.rise,
         key: 'fallback',
         label: '데모 대체',
@@ -260,7 +269,7 @@ function App() {
       .catch(() => null)
       .then((data) => setFishing((current) => (current?.index === index ? { ...current, news: data?.items ?? [] } : current)))
     // 입질 시점은 장면이 정한다(걸어가기·던지기·기다리기 뒤). 장면이 멈춰 있을 때를 대비한 안전장치만 둔다
-    fishingTimer.current = window.setTimeout(() => hookFish(index), 20000)
+    fishingTimer.current = window.setTimeout(() => hookFish(index), 30000)
   }
   const hookFish = (index) => {
     window.clearTimeout(fishingTimer.current)
@@ -320,6 +329,17 @@ function App() {
     if (fishing) stopFishing()
     setPicked(name)
   }
+  // ?open=… : 섬이 뜨고 잠시 뒤 그 대상을 눌러 둔다 (캡처·발표용)
+  const pickRef = useRef(pick)
+  useEffect(() => {
+    pickRef.current = pick
+  })
+  useEffect(() => {
+    if (!OPEN_PARAM || screen !== 'scene') return undefined
+    const timer = window.setTimeout(() => pickRef.current(OPEN_PARAM), 3500)
+    return () => window.clearTimeout(timer)
+  }, [screen])
+
 
   const getPickedInfo = () => {
     const percent = (value) => `${value > 0 ? '+' : ''}${value.toFixed(2)}%`
