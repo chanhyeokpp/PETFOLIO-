@@ -1,0 +1,247 @@
+<Rive version="1" kind="fragment">
+    <Artboard defaultStateMachineId="0:7" viewModelId="0:110" viewModelInstanceId="0:111" styleId="0:5" width="800" height="800" name="PoriMarket" id="0:2">
+        <LayoutComponentStyle name="Artboard Style" id="0:5"/>
+
+        <Node x="400" y="405" name="PoriRoot" id="0:20">
+            <Node x="0" y="-130" name="Head" id="0:50">
+                <Node opacity="0" name="CuteFace" id="0:70">
+                    <Shape x="0" y="73" name="CuteTongue">
+                        <Ellipse width="52" height="34" name="CuteTonguePath"/>
+                        <Fill name="CuteTongueFill"><SolidColor colorValue="FFFF8299" name="Color"/></Fill>
+                    </Shape>
+                    <Shape x="0" y="50" name="CuteMouth">
+                        <Ellipse width="98" height="84" name="CuteMouthPath"/>
+                        <Fill name="CuteMouthFill"><SolidColor colorValue="FF332E2F" name="Color"/></Fill>
+                    </Shape>
+                    <Shape x="-77" y="-25" name="CuteEyeLeft">
+                        <PointsPath isClosed="false" name="CuteEyeLeftPath">
+                            <CubicDetachedVertex x="-34" y="8" inRotation="0" inDistance="0" outRotation="-0.62" outDistance="28"/>
+                            <CubicDetachedVertex x="34" y="8" inRotation="3.76" inDistance="28" outRotation="0" outDistance="0"/>
+                        </PointsPath>
+                        <Stroke thickness="14" cap="round" name="CuteEyeLeftStroke"><SolidColor colorValue="FF292526" name="Color"/></Stroke>
+                    </Shape>
+                    <Shape x="77" y="-25" name="CuteEyeRight">
+                        <PointsPath isClosed="false" name="CuteEyeRightPath">
+                            <CubicDetachedVertex x="-34" y="8" inRotation="0" inDistance="0" outRotation="-0.62" outDistance="28"/>
+                            <CubicDetachedVertex x="34" y="8" inRotation="3.76" inDistance="28" outRotation="0" outDistance="0"/>
+                        </PointsPath>
+                        <Stroke thickness="14" cap="round" name="CuteEyeRightStroke"><SolidColor colorValue="FF292526" name="Color"/></Stroke>
+                    </Shape>
+                    <Shape x="-128" y="47" rotation="-0.12" name="CuteBlushLeftOne"><Ellipse width="28" height="9" name="BlushPath"/><Fill name="BlushFill"><SolidColor colorValue="FFFF8299" name="Color"/></Fill></Shape>
+                    <Shape x="-101" y="58" rotation="-0.12" name="CuteBlushLeftTwo"><Ellipse width="24" height="9" name="BlushPath"/><Fill name="BlushFill"><SolidColor colorValue="FFFF8299" name="Color"/></Fill></Shape>
+                    <Shape x="128" y="47" rotation="0.12" name="CuteBlushRightOne"><Ellipse width="28" height="9" name="BlushPath"/><Fill name="BlushFill"><SolidColor colorValue="FFFF8299" name="Color"/></Fill></Shape>
+                    <Shape x="101" y="58" rotation="0.12" name="CuteBlushRightTwo"><Ellipse width="24" height="9" name="BlushPath"/><Fill name="BlushFill"><SolidColor colorValue="FFFF8299" name="Color"/></Fill></Shape>
+                </Node>
+                <Shape x="-86" y="-42" name="EyeLeftHighlight" id="0:67">
+                    <Ellipse width="17" height="21" name="HighlightPath"/>
+                    <Fill name="HighlightFill"><SolidColor colorValue="FFFFFFFF" name="Color"/></Fill>
+                </Shape>
+                <Shape x="66" y="-42" name="EyeRightHighlight" id="0:68">
+                    <Ellipse width="17" height="21" name="HighlightPath"/>
+                    <Fill name="HighlightFill"><SolidColor colorValue="FFFFFFFF" name="Color"/></Fill>
+                </Shape>
+                <Shape x="0" y="12" name="Nose">
+                    <Ellipse width="62" height="39" name="NosePath"/>
+                    <Fill name="NoseFill"><SolidColor colorValue="FF292526" name="Color"/></Fill>
+                </Shape>
+                <Shape x="0" y="58" name="Mouth" id="0:62">
+                    <PointsPath isClosed="false" name="MouthPath">
+                        <CubicDetachedVertex x="-46" y="-4" inRotation="0" inDistance="0" outRotation="0.55" outDistance="28"/>
+                        <CubicDetachedVertex x="0" y="22" inRotation="3.14159" inDistance="24" outRotation="0" outDistance="24"/>
+                        <CubicDetachedVertex x="46" y="-4" inRotation="2.59" inDistance="28" outRotation="0" outDistance="0"/>
+                    </PointsPath>
+                    <Stroke thickness="11" cap="round" join="round" name="MouthStroke"><SolidColor colorValue="FF292526" name="Color"/></Stroke>
+                </Shape>
+                <Shape x="-76" y="-25" name="EyeLeft" id="0:65">
+                    <Ellipse width="58" height="78" name="EyeLeftPath"/>
+                    <Fill name="EyeLeftFill"><SolidColor colorValue="FF292526" name="Color"/></Fill>
+                </Shape>
+                <Shape x="76" y="-25" name="EyeRight" id="0:66">
+                    <Ellipse width="58" height="78" name="EyeRightPath"/>
+                    <Fill name="EyeRightFill"><SolidColor colorValue="FF292526" name="Color"/></Fill>
+                </Shape>
+                <Shape x="-80" y="-91" name="BrowLeft" id="0:63">
+                    <PointsPath isClosed="false" name="BrowLeftPath">
+                        <CubicDetachedVertex x="-24" y="5" inRotation="0" inDistance="0" outRotation="-0.45" outDistance="17"/>
+                        <CubicDetachedVertex x="24" y="5" inRotation="3.59" inDistance="17" outRotation="0" outDistance="0"/>
+                    </PointsPath>
+                    <Stroke thickness="12" cap="round" name="BrowLeftStroke"><SolidColor colorValue="FF292526" name="Color"/></Stroke>
+                </Shape>
+                <Shape x="80" y="-91" name="BrowRight" id="0:64">
+                    <PointsPath isClosed="false" name="BrowRightPath">
+                        <CubicDetachedVertex x="-24" y="5" inRotation="0" inDistance="0" outRotation="-0.45" outDistance="17"/>
+                        <CubicDetachedVertex x="24" y="5" inRotation="3.59" inDistance="17" outRotation="0" outDistance="0"/>
+                    </PointsPath>
+                    <Stroke thickness="12" cap="round" name="BrowRightStroke"><SolidColor colorValue="FF292526" name="Color"/></Stroke>
+                </Shape>
+                <Shape x="-122" y="50" name="CheekLeft" id="0:69">
+                    <Ellipse width="74" height="38" name="CheekLeftPath"/>
+                    <Fill name="CheekLeftFill"><SolidColor colorValue="FFFFB8A6" name="Color"/></Fill>
+                </Shape>
+                <Shape x="122" y="50" name="CheekRight" id="0:71">
+                    <Ellipse width="74" height="38" name="CheekRightPath"/>
+                    <Fill name="CheekRightFill"><SolidColor colorValue="FFFFB8A6" name="Color"/></Fill>
+                </Shape>
+                <Shape x="0" y="48" name="Muzzle">
+                    <Ellipse width="190" height="140" name="MuzzlePath"/>
+                    <Fill name="MuzzleFill"><SolidColor colorValue="FFFFFEFA" name="Color"/></Fill>
+                </Shape>
+                <Shape name="HeadBase">
+                    <Ellipse width="390" height="350" name="HeadPath"/>
+                    <Fill name="HeadFill"><SolidColor colorValue="FFFFF4E6" name="Color"/></Fill>
+                    <Stroke thickness="14" name="HeadOutline"><SolidColor colorValue="FF332E2F" name="Color"/></Stroke>
+                </Shape>
+                <Node x="-155" y="-100" rotation="-0.42" name="EarLeft">
+                    <Shape name="EarLeftInner"><Ellipse width="65" height="75" name="InnerPath"/><Fill name="InnerFill"><SolidColor colorValue="FF9CE5D5" name="Color"/></Fill></Shape>
+                    <Shape name="EarLeftOuter"><Ellipse width="115" height="130" name="OuterPath"/><Fill name="OuterFill"><SolidColor colorValue="FFFFF4E6" name="Color"/></Fill><Stroke thickness="14" name="OuterOutline"><SolidColor colorValue="FF332E2F" name="Color"/></Stroke></Shape>
+                </Node>
+                <Node x="155" y="-100" rotation="0.42" name="EarRight">
+                    <Shape name="EarRightInner"><Ellipse width="65" height="75" name="InnerPath"/><Fill name="InnerFill"><SolidColor colorValue="FF9CE5D5" name="Color"/></Fill></Shape>
+                    <Shape name="EarRightOuter"><Ellipse width="115" height="130" name="OuterPath"/><Fill name="OuterFill"><SolidColor colorValue="FFFFF4E6" name="Color"/></Fill><Stroke thickness="14" name="OuterOutline"><SolidColor colorValue="FF332E2F" name="Color"/></Stroke></Shape>
+                </Node>
+            </Node>
+
+            <Node x="-173" y="100" rotation="0.64" name="ArmLeft" id="0:60">
+                <Shape name="ArmLeftShape"><Ellipse width="92" height="205" name="ArmLeftPath"/><Fill name="ArmLeftFill"><SolidColor colorValue="FFFFF4E6" name="Color"/></Fill><Stroke thickness="14" name="ArmLeftOutline"><SolidColor colorValue="FF332E2F" name="Color"/></Stroke></Shape>
+            </Node>
+            <Node x="173" y="100" rotation="-0.64" name="ArmRight" id="0:61">
+                <Shape name="ArmRightShape"><Ellipse width="92" height="205" name="ArmRightPath"/><Fill name="ArmRightFill"><SolidColor colorValue="FFFFF4E6" name="Color"/></Fill><Stroke thickness="14" name="ArmRightOutline"><SolidColor colorValue="FF332E2F" name="Color"/></Stroke></Shape>
+            </Node>
+
+            <Node x="0" y="135" name="Body" id="0:30">
+                <Shape x="0" y="12" name="Belly"><Ellipse width="190" height="225" name="BellyPath"/><Fill name="BellyFill"><SolidColor colorValue="FF9CE5D5" name="Color"/></Fill></Shape>
+                <Node x="-90" y="168" rotation="0.1" name="LegLeft">
+                    <Shape name="LegLeftShape"><Ellipse width="118" height="95" name="LegLeftPath"/><Fill name="LegLeftFill"><SolidColor colorValue="FFFFF4E6" name="Color"/></Fill><Stroke thickness="14" name="LegLeftOutline"><SolidColor colorValue="FF332E2F" name="Color"/></Stroke></Shape>
+                </Node>
+                <Node x="90" y="168" rotation="-0.1" name="LegRight">
+                    <Shape name="LegRightShape"><Ellipse width="118" height="95" name="LegRightPath"/><Fill name="LegRightFill"><SolidColor colorValue="FFFFF4E6" name="Color"/></Fill><Stroke thickness="14" name="LegRightOutline"><SolidColor colorValue="FF332E2F" name="Color"/></Stroke></Shape>
+                </Node>
+                <Shape name="BodyBase"><Ellipse width="325" height="390" name="BodyPath"/><Fill name="BodyFill"><SolidColor colorValue="FFFFF4E6" name="Color"/></Fill><Stroke thickness="14" name="BodyOutline"><SolidColor colorValue="FF332E2F" name="Color"/></Stroke></Shape>
+            </Node>
+
+            <Node x="178" y="190" rotation="-0.72" name="Tail" id="0:40">
+                <Shape x="0" y="77" name="TailTip"><Ellipse width="92" height="95" name="TailTipPath"/><Fill name="TailTipFill"><SolidColor colorValue="FF9CE5D5" name="Color"/></Fill></Shape>
+                <Shape name="TailBase"><Ellipse width="125" height="245" name="TailPath"/><Fill name="TailFill"><SolidColor colorValue="FFFFF4E6" name="Color"/></Fill><Stroke thickness="14" name="TailOutline"><SolidColor colorValue="FF332E2F" name="Color"/></Stroke></Shape>
+            </Node>
+        </Node>
+
+        <StateMachine name="MarketStateMachine" id="0:7">
+            <StateMachineLayer name="MarketMotion" id="0:8">
+                <AnyState x="300" y="-170" stateName="Market Router">
+                    <StateTransition stateToId="0:121" duration="120"><TransitionViewModelCondition opValue="equal"><TransitionPropertyViewModelComparator><BindablePropertyEnum><DataBindContext sourcePathIds="0:110-0:112" propertyKey="637"/></BindablePropertyEnum></TransitionPropertyViewModelComparator><TransitionValueEnumComparator value="0:101"/></TransitionViewModelCondition></StateTransition>
+                    <StateTransition stateToId="0:122" duration="120"><TransitionViewModelCondition opValue="equal"><TransitionPropertyViewModelComparator><BindablePropertyEnum><DataBindContext sourcePathIds="0:110-0:112" propertyKey="637"/></BindablePropertyEnum></TransitionPropertyViewModelComparator><TransitionValueEnumComparator value="0:102"/></TransitionViewModelCondition></StateTransition>
+                    <StateTransition stateToId="0:123" duration="120"><TransitionViewModelCondition opValue="equal"><TransitionPropertyViewModelComparator><BindablePropertyEnum><DataBindContext sourcePathIds="0:110-0:112" propertyKey="637"/></BindablePropertyEnum></TransitionPropertyViewModelComparator><TransitionValueEnumComparator value="0:103"/></TransitionViewModelCondition></StateTransition>
+                    <StateTransition stateToId="0:124" duration="120"><TransitionViewModelCondition opValue="equal"><TransitionPropertyViewModelComparator><BindablePropertyEnum><DataBindContext sourcePathIds="0:110-0:112" propertyKey="637"/></BindablePropertyEnum></TransitionPropertyViewModelComparator><TransitionValueEnumComparator value="0:104"/></TransitionViewModelCondition></StateTransition>
+                    <StateTransition stateToId="0:125" duration="120"><TransitionViewModelCondition opValue="equal"><TransitionPropertyViewModelComparator><BindablePropertyEnum><DataBindContext sourcePathIds="0:110-0:112" propertyKey="637"/></BindablePropertyEnum></TransitionPropertyViewModelComparator><TransitionValueEnumComparator value="0:105"/></TransitionViewModelCondition></StateTransition>
+                </AnyState>
+                <ExitState x="540" y="-170"/>
+                <EntryState x="0" y="0"><StateTransition stateToId="0:124"/></EntryState>
+                <AnimationState x="180" y="-80" animationId="0:201" stateName="Rise" id="0:121"/>
+                <AnimationState x="360" y="0" animationId="0:202" stateName="Flat" id="0:122"/>
+                <AnimationState x="180" y="80" animationId="0:203" stateName="Fall" id="0:123"/>
+                <AnimationState x="0" y="-100" animationId="0:204" stateName="Loading" id="0:124"/>
+                <AnimationState x="0" y="100" animationId="0:205" stateName="Error" id="0:125"/>
+            </StateMachineLayer>
+            <StateMachineLayer name="TouchExpression" id="0:9">
+                <AnyState x="300" y="-100" stateName="Touch Router">
+                    <StateTransition stateToId="0:127" duration="40">
+                        <TransitionViewModelCondition>
+                            <TransitionPropertyViewModelComparator>
+                                <BindablePropertyTrigger>
+                                    <DataBindContext sourcePathIds="0:110-0:116" propertyKey="686"/>
+                                </BindablePropertyTrigger>
+                            </TransitionPropertyViewModelComparator>
+                            <TransitionValueTriggerComparator value="1"/>
+                        </TransitionViewModelCondition>
+                    </StateTransition>
+                </AnyState>
+                <ExitState x="500" y="-100"/>
+                <EntryState x="0" y="0"><StateTransition stateToId="0:126"/></EntryState>
+                <AnimationState x="160" y="0" animationId="0:207" stateName="Touch Idle" id="0:126"/>
+                <AnimationState x="340" y="0" animationId="0:206" stateName="Cute Touch" reset="true" id="0:127">
+                    <StateTransition stateToId="0:126" duration="100" enableExitTime="true" exitTimeIsPercetange="true" exitTime="100"/>
+                </AnimationState>
+            </StateMachineLayer>
+        </StateMachine>
+
+        <LinearAnimation fps="60" loopValue="oneShot" duration="72" name="Rise" id="0:201">
+            <KeyedObject objectId="0:20"><KeyedProperty property="y"><KeyFrameDouble value="405" frame="0" interpolationType="linear"/><KeyFrameDouble value="320" frame="28" interpolationType="linear"/><KeyFrameDouble value="405" frame="72" interpolationType="linear"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:30"><KeyedProperty property="scaleY"><KeyFrameDouble value="0.94" frame="0" interpolationType="linear"/><KeyFrameDouble value="1.06" frame="22" interpolationType="linear"/><KeyFrameDouble value="1" frame="72" interpolationType="linear"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:60"><KeyedProperty property="rotation"><KeyFrameDouble value="0.64" frame="0" interpolationType="linear"/><KeyFrameDouble value="1.18" frame="24" interpolationType="linear"/><KeyFrameDouble value="0.64" frame="72" interpolationType="linear"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:61"><KeyedProperty property="rotation"><KeyFrameDouble value="-0.64" frame="0" interpolationType="linear"/><KeyFrameDouble value="-1.18" frame="24" interpolationType="linear"/><KeyFrameDouble value="-0.64" frame="72" interpolationType="linear"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:40"><KeyedProperty property="rotation"><KeyFrameDouble value="-0.72" frame="0" interpolationType="linear"/><KeyFrameDouble value="-1.05" frame="28" interpolationType="linear"/><KeyFrameDouble value="-0.72" frame="72" interpolationType="linear"/></KeyedProperty></KeyedObject>
+        </LinearAnimation>
+
+        <LinearAnimation fps="60" loopValue="loop" duration="180" name="Flat" id="0:202">
+            <KeyedObject objectId="0:20"><KeyedProperty property="rotation"><KeyFrameDouble value="-0.012" frame="0" interpolationType="linear"/><KeyFrameDouble value="0.012" frame="90" interpolationType="linear"/><KeyFrameDouble value="-0.012" frame="180" interpolationType="linear"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:30"><KeyedProperty property="scaleY"><KeyFrameDouble value="1" frame="0" interpolationType="linear"/><KeyFrameDouble value="1.018" frame="90" interpolationType="linear"/><KeyFrameDouble value="1" frame="180" interpolationType="linear"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:40"><KeyedProperty property="rotation"><KeyFrameDouble value="-0.72" frame="0" interpolationType="linear"/><KeyFrameDouble value="-0.61" frame="90" interpolationType="linear"/><KeyFrameDouble value="-0.72" frame="180" interpolationType="linear"/></KeyedProperty></KeyedObject>
+        </LinearAnimation>
+
+        <LinearAnimation fps="60" loopValue="loop" duration="120" name="Fall" id="0:203">
+            <KeyedObject objectId="0:20"><KeyedProperty property="y"><KeyFrameDouble value="415" frame="0" interpolationType="linear"/><KeyFrameDouble value="424" frame="60" interpolationType="linear"/><KeyFrameDouble value="415" frame="120" interpolationType="linear"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:50"><KeyedProperty property="y"><KeyFrameDouble value="-118" frame="0" interpolationType="linear"/><KeyFrameDouble value="-112" frame="60" interpolationType="linear"/><KeyFrameDouble value="-118" frame="120" interpolationType="linear"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:60"><KeyedProperty property="rotation"><KeyFrameDouble value="0.28" frame="0" interpolationType="linear"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:61"><KeyedProperty property="rotation"><KeyFrameDouble value="-0.28" frame="0" interpolationType="linear"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:40"><KeyedProperty property="rotation"><KeyFrameDouble value="-0.40" frame="0" interpolationType="linear"/><KeyFrameDouble value="-0.32" frame="60" interpolationType="linear"/><KeyFrameDouble value="-0.40" frame="120" interpolationType="linear"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:62"><KeyedProperty property="scaleY"><KeyFrameDouble value="-1" frame="0" interpolationType="linear"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:63"><KeyedProperty property="rotation"><KeyFrameDouble value="0.16" frame="0" interpolationType="linear"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:64"><KeyedProperty property="rotation"><KeyFrameDouble value="-0.16" frame="0" interpolationType="linear"/></KeyedProperty></KeyedObject>
+        </LinearAnimation>
+
+        <LinearAnimation fps="60" loopValue="loop" duration="120" name="Loading" id="0:204">
+            <KeyedObject objectId="0:20"><KeyedProperty property="y"><KeyFrameDouble value="405" frame="0" interpolationType="linear"/><KeyFrameDouble value="394" frame="60" interpolationType="linear"/><KeyFrameDouble value="405" frame="120" interpolationType="linear"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:50"><KeyedProperty property="rotation"><KeyFrameDouble value="-0.055" frame="0" interpolationType="linear"/><KeyFrameDouble value="0.055" frame="60" interpolationType="linear"/><KeyFrameDouble value="-0.055" frame="120" interpolationType="linear"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:40"><KeyedProperty property="rotation"><KeyFrameDouble value="-0.72" frame="0" interpolationType="linear"/><KeyFrameDouble value="-0.60" frame="60" interpolationType="linear"/><KeyFrameDouble value="-0.72" frame="120" interpolationType="linear"/></KeyedProperty></KeyedObject>
+        </LinearAnimation>
+
+        <LinearAnimation fps="60" loopValue="oneShot" duration="90" name="Error" id="0:205">
+            <KeyedObject objectId="0:50"><KeyedProperty property="rotation"><KeyFrameDouble value="0" frame="0" interpolationType="linear"/><KeyFrameDouble value="0.14" frame="32" interpolationType="linear"/><KeyFrameDouble value="0" frame="90" interpolationType="linear"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:20"><KeyedProperty property="scaleX"><KeyFrameDouble value="1" frame="0" interpolationType="linear"/><KeyFrameDouble value="1.035" frame="18" interpolationType="linear"/><KeyFrameDouble value="1" frame="90" interpolationType="linear"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:62"><KeyedProperty property="scaleY"><KeyFrameDouble value="1" frame="0" interpolationType="linear"/><KeyFrameDouble value="0.28" frame="24" interpolationType="linear"/><KeyFrameDouble value="1" frame="90" interpolationType="linear"/></KeyedProperty></KeyedObject>
+        </LinearAnimation>
+
+        <LinearAnimation fps="60" loopValue="oneShot" duration="96" name="Cute Touch" id="0:206">
+            <KeyedObject objectId="0:70">
+                <KeyedProperty property="opacity"><KeyFrameDouble value="0" frame="0"/><KeyFrameDouble value="1" frame="7"/><KeyFrameDouble value="1" frame="74"/><KeyFrameDouble value="0" frame="96"/></KeyedProperty>
+                <KeyedProperty property="scaleY"><KeyFrameDouble value="0.72" frame="0"/><KeyFrameDouble value="1.08" frame="12"/><KeyFrameDouble value="1" frame="22"/><KeyFrameDouble value="1" frame="80"/><KeyFrameDouble value="0.84" frame="96"/></KeyedProperty>
+            </KeyedObject>
+            <KeyedObject objectId="0:65"><KeyedProperty property="opacity"><KeyFrameDouble value="1" frame="0"/><KeyFrameDouble value="0" frame="6"/><KeyFrameDouble value="0" frame="78"/><KeyFrameDouble value="1" frame="96"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:66"><KeyedProperty property="opacity"><KeyFrameDouble value="1" frame="0"/><KeyFrameDouble value="0" frame="6"/><KeyFrameDouble value="0" frame="78"/><KeyFrameDouble value="1" frame="96"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:67"><KeyedProperty property="opacity"><KeyFrameDouble value="1" frame="0"/><KeyFrameDouble value="0" frame="6"/><KeyFrameDouble value="0" frame="78"/><KeyFrameDouble value="1" frame="96"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:68"><KeyedProperty property="opacity"><KeyFrameDouble value="1" frame="0"/><KeyFrameDouble value="0" frame="6"/><KeyFrameDouble value="0" frame="78"/><KeyFrameDouble value="1" frame="96"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:62"><KeyedProperty property="opacity"><KeyFrameDouble value="1" frame="0"/><KeyFrameDouble value="0" frame="6"/><KeyFrameDouble value="0" frame="78"/><KeyFrameDouble value="1" frame="96"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:63"><KeyedProperty property="opacity"><KeyFrameDouble value="1" frame="0"/><KeyFrameDouble value="0" frame="6"/><KeyFrameDouble value="0" frame="78"/><KeyFrameDouble value="1" frame="96"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:64"><KeyedProperty property="opacity"><KeyFrameDouble value="1" frame="0"/><KeyFrameDouble value="0" frame="6"/><KeyFrameDouble value="0" frame="78"/><KeyFrameDouble value="1" frame="96"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:69"><KeyedProperty property="scaleX"><KeyFrameDouble value="1" frame="0"/><KeyFrameDouble value="1.25" frame="12"/><KeyFrameDouble value="1.12" frame="74"/><KeyFrameDouble value="1" frame="96"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:71"><KeyedProperty property="scaleX"><KeyFrameDouble value="1" frame="0"/><KeyFrameDouble value="1.25" frame="12"/><KeyFrameDouble value="1.12" frame="74"/><KeyFrameDouble value="1" frame="96"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:50"><KeyedProperty property="scaleY"><KeyFrameDouble value="1" frame="0"/><KeyFrameDouble value="0.96" frame="8"/><KeyFrameDouble value="1.04" frame="16"/><KeyFrameDouble value="1" frame="26"/><KeyFrameDouble value="1" frame="96"/></KeyedProperty></KeyedObject>
+        </LinearAnimation>
+
+        <LinearAnimation fps="60" loopValue="loop" duration="60" name="Touch Idle" id="0:207">
+            <KeyedObject objectId="0:70"><KeyedProperty property="opacity"><KeyFrameDouble value="0" frame="0"/></KeyedProperty></KeyedObject>
+        </LinearAnimation>
+    </Artboard>
+
+    <DataEnumCustom name="MarketState" id="0:100">
+        <DataEnumValue key="rise" value="Rise" id="0:101"/>
+        <DataEnumValue key="flat" value="Flat" id="0:102"/>
+        <DataEnumValue key="fall" value="Fall" id="0:103"/>
+        <DataEnumValue key="loading" value="Loading" id="0:104"/>
+        <DataEnumValue key="error" value="Error" id="0:105"/>
+    </DataEnumCustom>
+    <ViewModel defaultInstanceId="0:111" name="MarketViewModel" id="0:110">
+        <ViewModelPropertyEnumCustom enumId="0:100" name="marketState" id="0:112"/>
+        <ViewModelPropertyNumber name="changeRate" id="0:113"/>
+        <ViewModelPropertyNumber name="kospiValue" id="0:114"/>
+        <ViewModelPropertyString name="updatedAt" id="0:115"/>
+        <ViewModelPropertyTrigger name="touchReaction" id="0:116"/>
+        <ViewModelInstance exports="true" name="Default" id="0:111">
+            <ViewModelInstanceEnum propertyValue="0:104" viewModelPropertyId="0:112"/>
+            <ViewModelInstanceNumber propertyValue="0" viewModelPropertyId="0:113"/>
+            <ViewModelInstanceNumber propertyValue="0" viewModelPropertyId="0:114"/>
+            <ViewModelInstanceString propertyValue="-" viewModelPropertyId="0:115"/>
+            <ViewModelInstanceTrigger propertyValue="0" viewModelPropertyId="0:116" id="0:117"/>
+        </ViewModelInstance>
+    </ViewModel>
+</Rive>
