@@ -83,8 +83,17 @@ export function marketReason(key, market) {
 }
 
 // 방문 기록. 이미 쓰던 사용자(이 기능 전부터 기록이 있던 브라우저)는 섬을 다 연 상태로 시작한다.
-export function startIsland(today, { preview = false } = {}) {
-  if (preview) return { visits: [today], unlocked: {}, introduced: [], preview: true }
+// preview: 'new' = 처음 온 사람의 섬, 'all' = 다 열린 섬 (발표용). 둘 다 저장하지 않는다.
+export function startIsland(today, { preview = null } = {}) {
+  if (preview === 'new') return { visits: [today], unlocked: {}, introduced: [], preview: true }
+  if (preview === 'all') {
+    return {
+      visits: [today],
+      unlocked: Object.fromEntries(ALL_KEYS.map((key) => [key, { day: today, reason: null }])),
+      introduced: [...ALL_KEYS],
+      preview: true,
+    }
+  }
   let visits = read(VISITS_KEY, null)
   let unlocked = read(UNLOCKED_KEY, null)
   let introduced = read(INTRODUCED_KEY, [])

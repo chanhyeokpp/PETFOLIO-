@@ -25,7 +25,8 @@ const SCREEN_PARAM = ['select', 'news', 'scene'].includes(URL_PARAMS.get('screen
 const DEMO_PARAM = ['rise', 'flat', 'fall', 'closed'].includes(URL_PARAMS.get('demo')) ? URL_PARAMS.get('demo') : null
 const OPEN_PARAM = URL_PARAMS.get('open')
 //   ?island=new   처음 온 사람의 섬으로 보기 (저장하지 않음)
-const ISLAND_PREVIEW = URL_PARAMS.get('island') === 'new'
+//   ?island=all   다 열린 섬으로 보기 (발표용, 저장하지 않음)
+const ISLAND_PREVIEW = ['new', 'all'].includes(URL_PARAMS.get('island')) ? URL_PARAMS.get('island') : null
 
 // 오늘 이야기의 분류 → 포리가 가 있는 곳
 const PLACE_BY_TAG = { flow: 'dock', us: 'lighthouse', fx: 'lighthouse', leader: 'shore', stock: 'shore' }
