@@ -708,12 +708,32 @@ export default function PoriIsland({
     const onGrass = (x, z) => insidePolygon(grassOutline, x * 1.14, z * 1.14)
       && !insidePolygon(hillOutline, HILL_CENTER.x + (x - HILL_CENTER.x) / 1.22, HILL_CENTER.z + (z - HILL_CENTER.z) / 1.22)
     const standable = (x, z) => onGrass(x, z) && OBSTACLES.every((item) => Math.hypot(x - item.x, z - item.z) > item.r)
+    // setting Pori down by hand may go closer to the grass edge than strolling does
+    const droppable = (x, z) => insidePolygon(grassOutline, x * 1.06, z * 1.06)
+      && !insidePolygon(hillOutline, HILL_CENTER.x + (x - HILL_CENTER.x) / 1.15, HILL_CENTER.z + (z - HILL_CENTER.z) / 1.15)
+      && OBSTACLES.every((item) => Math.hypot(x - item.x, z - item.z) > item.r * 0.8)
+    // the start may be right at the edge (set down by hand), so only the rest of the way has to be clear
     const pathClear = (x0, z0, x1, z1) => {
-      for (let i = 1; i <= 10; i += 1) {
+      for (let i = 3; i <= 10; i += 1) {
         const t = i / 10
         if (!standable(x0 + (x1 - x0) * t, z0 + (z1 - z0) * t)) return false
       }
       return true
+    }
+    // nearest place Pori can stand, searching outward in rings from (x, z)
+    const nearestStandable = (x, z) => {
+      if (droppable(x, z)) return { x, z }
+      for (let radius = 0.1; radius <= 5; radius += 0.1) {
+        let best = null
+        for (let i = 0; i < 24; i += 1) {
+          const angle = (i / 24) * Math.PI * 2
+          const px = x + Math.cos(angle) * radius
+          const pz = z + Math.sin(angle) * radius
+          if (droppable(px, pz) && (!best || Math.hypot(px, pz) < Math.hypot(best.x, best.z))) best = { x: px, z: pz }
+        }
+        if (best) return best
+      }
+      return null
     }
     const pathMaterial = standard(PALETTE.path)
     scene.add(
@@ -1138,7 +1158,9 @@ export default function PoriIsland({
     // --- lifting Pori: press on Pori and drag. A tap without moving stays a tap (pet). ---
     const raycaster = new THREE.Raycaster()
     const pointerNdc = new THREE.Vector2()
-    const holdPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -GROUND_Y)
+    // the ray meets Pori's body height (lifted Pori's middle), so the body hangs right under the cursor
+    const HOLD_HEIGHT = GROUND_Y + 0.85 + 0.25
+    const holdPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -HOLD_HEIGHT)
     const holdPoint = new THREE.Vector3()
     const groundUnder = (event) => {
       const rect = host.getBoundingClientRect()
@@ -1168,10 +1190,10 @@ export default function PoriIsland({
       if (!point) return
       // can't carry Pori off into the distance
       const reach = Math.hypot(point.x, point.z)
-      const scale = reach > 5 ? 5 / reach : 1
+      const scale = reach > 8 ? 8 / reach : 1
       lift.x = point.x * scale
       lift.z = point.z * scale
-      lift.valid = standable(lift.x, lift.z)
+      lift.valid = droppable(lift.x, lift.z)
       if (lift.valid) lift.lastValid = { x: lift.x, z: lift.z }
     }
     const liftUp = (event) => {
@@ -1184,9 +1206,10 @@ export default function PoriIsland({
       window.setTimeout(() => { lift.suppressClick = false }, 0)
       const now = performance.now() / 1000
       const refused = !lift.valid
-      const to = refused ? lift.lastValid : { x: lift.x, z: lift.z }
+      // over water: hop to the nearest bit of shore right there, not back across the island
+      const to = refused ? nearestStandable(lift.x, lift.z) ?? lift.lastValid : { x: lift.x, z: lift.z }
       lift.drop = {
-        start: now, duration: refused ? 0.7 : 0.32, refused,
+        start: now, duration: refused ? 0.5 : 0.32, refused,
         fromX: walker.x, fromZ: walker.z, toX: to.x, toZ: to.z, fromHeight: lift.height,
       }
       if (refused) lift.refusedAt = now + 0.7
@@ -1309,13 +1332,13 @@ export default function PoriIsland({
         const e = easeInOut(t)
         walker.x = THREE.MathUtils.lerp(lift.drop.fromX, lift.drop.toX, e)
         walker.z = THREE.MathUtils.lerp(lift.drop.fromZ, lift.drop.toZ, e)
-        lift.height = lift.drop.fromHeight * (1 - e) + Math.sin(t * Math.PI) * (lift.drop.refused ? 0.6 : 0.1)
+        lift.height = lift.drop.fromHeight * (1 - e) + Math.sin(t * Math.PI) * (lift.drop.refused ? 0.3 : 0.1)
         if (t >= 1) {
           lift.drop = null
           lift.height = 0
           lift.landedAt = now
           strolling.target = null
-          strolling.idleUntil = now + 3
+          strolling.idleUntil = now + 5 + Math.random() * 3
         }
       } else {
         lift.height = 0
@@ -1461,10 +1484,12 @@ export default function PoriIsland({
       live.armLift = damp(live.armLift, lift.active ? 1.3 + Math.sin(now * 9) * 0.15 * motion : armLift, 14, dt)
 
       const sinceTouch = now - touchRef.current.at
-      const happyTarget = lift.active ? (heldFor >= 0.55 ? 1 : 0) : (sinceTouch < 1.5 || fx.cheer) && state !== 'closed' ? 1 : 0
+      // over water while held: nervous (wide eyes, pursed mouth), not delighted
+      const overWater = lift.active && !lift.valid
+      const happyTarget = lift.active ? (heldFor >= 0.55 && !overWater ? 1 : 0) : (sinceTouch < 1.5 || fx.cheer) && state !== 'closed' ? 1 : 0
       live.happy = damp(live.happy, happyTarget, lift.active ? 10 : 14, dt)
       live.focus = damp(live.focus, refusing ? 1 : fx.focus, refusing ? 12 : 8, dt)
-      live.surprise = damp(live.surprise, lift.active ? (heldFor < 0.55 ? 1 : 0) : fx.surprise, 14, dt)
+      live.surprise = damp(live.surprise, lift.active ? (heldFor < 0.55 || overWater ? 1 : 0) : fx.surprise, 14, dt)
       live.headYaw = damp(live.headYaw, fx.headYaw + (refusing ? Math.sin(now * 20) * 0.55 : 0), refusing ? 30 : 7, dt)
       const touchBounce = sinceTouch < 0.9 ? Math.sin(sinceTouch * 16) * Math.exp(-sinceTouch * 5) * 0.09 * motion : 0
       live.yaw = damp(live.yaw, state === 'loading' ? Math.sin(now * 1.6) * 0.4 * motion : 0, 5, dt)
@@ -1516,7 +1541,7 @@ export default function PoriIsland({
       pori.feet.forEach((foot, index) => {
         const swing = Math.sin(walker.phase + index * Math.PI)
         // held: little legs kick in the air
-        const kick = lift.height * Math.sin(now * 11 + index * Math.PI) * 0.1 * motion
+        const kick = lift.height * Math.sin(now * (lift.active && !lift.valid ? 22 : 11) + index * Math.PI) * 0.1 * motion
         foot.position.y = 0.15 + Math.max(0, swing) * 0.16 * live.walk - lift.height * 0.06 + kick
         foot.position.z = 0.14 + swing * 0.14 * live.walk + kick * 0.6
       })
