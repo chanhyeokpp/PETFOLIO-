@@ -6,9 +6,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fetchKospi } from './kospi.js'
 import { collectHeadlines } from './news.js'
-
-const OPENAI_URL = 'https://api.openai.com/v1/chat/completions'
-const DEFAULT_MODEL = 'gpt-5-mini'
+import { askJson, objectSchema } from './openai.js'
 const MAX_HEADLINES = 60
 const MIN_HEADLINES = 5
 const CACHE_MS = 30 * 60 * 1000
@@ -34,6 +32,10 @@ const SYSTEM_PROMPT = `너는 한국 주식시장 시황을 초보자에게 설�
   - evidence: 그 원인을 말하는 제목 번호들. 서로 다른 언론사 2곳 이상이 있어야 한다.
   - "외국인 매도/매수"나 "반도체주 약세/강세"는 대개 다른 원인의 결과다. 제목 가운데 그 배경(예: 특정 인물의 발언, 실적, 금리, 정책, 소송, 미국 증시)을 말하는 것이 언론사 2곳 이상 있으면, 수급을 말하는 제목이 더 많더라도 반드시 그 배경을 범인으로 삼고 수급은 chain에 넣는다.
   - 수급(tag: flow)을 범인으로 삼는 것은 어떤 제목도 배경을 말하지 않을 때뿐이다.
+- suspects: 범인 말고도 제목들이 오늘 코스피의 원인으로 지목한 다른 후보 0~2개. 범인과 다른 원인이어야 한다(범인의 결과나 같은 얘기는 안 된다). 없으면 빈 배열.
+  - title: 20자 안팎의 명사구
+  - evidence: 그 후보를 말하는 제목 번호들
+  - 뚜렷한 범인이 없는 날(quiet)에도, 제목들이 말한 후보들을 여기에 적는다.
 - 제목들이 뚜렷한 원인을 말하지 않거나 서로 다른 얘기를 하면 culprit은 null, quiet는 true로 하고 quietMessage에 한 문장으로 상황을 적는다.
 - items: 알아둘 소식 3~5개. 범인과 관련된 소식을 먼저, 그 밖의 소식을 뒤에.
   - 소식마다 주제가 달라야 한다. 같은 얘기(예: 외국인 매도)는 하나로 묶고 두 번 쓰지 않는다. 수급 소식은 하나, 미국 증시 소식은 하나, 환율 소식은 하나까지만.
@@ -50,7 +52,7 @@ const SYSTEM_PROMPT = `너는 한국 주식시장 시황을 초보자에게 설�
   - evidence: 근거가 된 제목 번호 1~3개
 - tag는 다음 중 하나: us(미국 증시·미국 기업), fx(환율), flow(외국인·기관·개인 수급), leader(삼성전자·SK하이닉스), stock(그 밖의 개별 종목·업종), event(예정된 일정·발표), other(정책, 소송, 국제 정세 등 나머지).`
 
-const itemSchema = (properties, required) => ({ type: 'object', properties, required, additionalProperties: false })
+const itemSchema = objectSchema
 const RESPONSE_SCHEMA = itemSchema({
   quiet: { type: 'boolean' },
   quietMessage: { type: ['string', 'null'] },
@@ -76,7 +78,15 @@ const RESPONSE_SCHEMA = itemSchema({
       evidence: { type: 'array', items: { type: 'integer' } },
     }, ['title', 'summary', 'sentiment', 'tag', 'evidence']),
   },
-}, ['quiet', 'quietMessage', 'culprit', 'items'])
+  suspects: {
+    type: 'array',
+    items: itemSchema({
+      title: { type: 'string' },
+      tag: { type: 'string', enum: TAGS },
+      evidence: { type: 'array', items: { type: 'integer' } },
+    }, ['title', 'tag', 'evidence']),
+  },
+}, ['quiet', 'quietMessage', 'culprit', 'items', 'suspects'])
 
 const signed = (value) => `${value > 0 ? '+' : ''}${value.toFixed(2)}%`
 const formatEok = (eok) => (Math.abs(eok) >= 10_000 ? `${(Math.abs(eok) / 10_000).toFixed(1)}조원` : `${Math.round(Math.abs(eok)).toLocaleString('ko-KR')}억원`)
@@ -99,28 +109,9 @@ function buildUserPrompt(kospi, headlines) {
   return `오늘 결과와 참고 수치:\n${numbers.join('\n')}\n\n기사 제목 ${headlines.length}건:\n${list}`
 }
 
-async function askModel(apiKey, kospi, headlines) {
-  const response = await fetch(OPENAI_URL, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: process.env.OPENAI_MODEL || DEFAULT_MODEL,
-      reasoning_effort: 'low',
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: buildUserPrompt(kospi, headlines) },
-      ],
-      response_format: { type: 'json_schema', json_schema: { name: 'briefing', strict: true, schema: RESPONSE_SCHEMA } },
-    }),
-    signal: AbortSignal.timeout(60_000),
-  })
-  if (!response.ok) {
-    const detail = await response.json().catch(() => null)
-    throw new Error(`LLM request failed: ${response.status} ${detail?.error?.message ?? ''}`.trim())
-  }
-  const payload = await response.json()
-  return JSON.parse(payload.choices[0].message.content)
-}
+const askModel = (apiKey, kospi, headlines) => askJson({
+  apiKey, system: SYSTEM_PROMPT, user: buildUserPrompt(kospi, headlines), name: 'briefing', schema: RESPONSE_SCHEMA,
+})
 
 // 모델이 준 제목 번호를 실제 기사(언론사, 링크)로 바꾼다. 링크는 항상 우리가 수집한 값만 쓴다.
 function resolveEvidence(indexes, headlines) {
@@ -177,6 +168,55 @@ export function checkCulprit(tag, kospi) {
   return null
 }
 
+// 숫자 발자국: 섬의 각 장소가 오늘 어느 쪽을 가리켰는지. 범인과 상관없이 늘 같은 기준으로 계산한다.
+// agrees: 코스피와 같은 쪽으로 밀었는지(true/false), notable: 평소보다 눈에 띄게 움직였는지.
+export function buildFootprints(kospi) {
+  const direction = Math.sign(kospi.changeRate)
+  const drivers = kospi.drivers ?? {}
+  const prints = []
+  const us = [drivers.sox, drivers.nasdaq].filter(Boolean)
+  if (us.length > 0) {
+    const strongest = us.reduce((a, b) => (Math.abs(b.changePercent) > Math.abs(a.changePercent) ? b : a))
+    prints.push({
+      tag: 'us', text: `간밤 ${strongest.label} ${signed(strongest.changePercent)}`,
+      agrees: Math.sign(strongest.changePercent) === direction, notable: strongest.unusual >= 1,
+    })
+  }
+  if (drivers.usdkrw) {
+    const fx = drivers.usdkrw
+    // 환율이 오르면(원화 약세) 보통 코스피에는 부담
+    prints.push({
+      tag: 'fx', text: `원/달러 환율 ${signed(fx.changePercent)}`,
+      agrees: Math.sign(fx.changePercent) === -direction, notable: fx.unusual >= 1,
+    })
+  }
+  const foreign = kospi.investors?.foreign
+  if (Number.isFinite(foreign)) {
+    prints.push({
+      tag: 'flow', text: `외국인 ${formatEok(foreign)} ${foreign < 0 ? '순매도' : '순매수'}`,
+      agrees: Math.sign(foreign) === direction, notable: Math.abs(foreign) >= NOTABLE_FLOW_EOK,
+    })
+  }
+  const leaders = [drivers.samsung, drivers.hynix].filter(Boolean)
+  if (leaders.length > 0) {
+    const strongest = leaders.reduce((a, b) => (Math.abs(b.changePercent) > Math.abs(a.changePercent) ? b : a))
+    prints.push({
+      tag: 'leader', text: `${strongest.label} ${signed(strongest.changePercent)}`,
+      agrees: Math.sign(strongest.changePercent) === direction,
+      notable: Math.abs(strongest.changePercent) > Math.abs(kospi.changeRate),
+    })
+  }
+  return prints
+}
+
+// 확신도: 몇 곳이 말했는지와 숫자가 뒷받침하는지로 정한다. 모델이 스스로 매긴 점수는 쓰지 않는다.
+// strong(유력) / likely(가능성 있음) / unclear(단서는 있지만 불확실)
+export function rateConfidence(outletCount, check) {
+  if (check?.status === 'weak') return outletCount >= 4 ? 'likely' : 'unclear'
+  if (check?.status === 'supported') return outletCount >= 3 ? 'strong' : 'likely'
+  return outletCount >= 4 ? 'strong' : 'likely'
+}
+
 export function shapeBriefing(raw, kospi, headlines) {
   let culprit = null
   if (raw.culprit) {
@@ -193,8 +233,18 @@ export function shapeBriefing(raw, kospi, headlines) {
         check: checkCulprit(raw.culprit.tag, kospi),
         allLinks: sources.map((source) => source.link),
       }
+      culprit.confidence = rateConfidence(culprit.outletCount, culprit.check)
     }
   }
+
+  // 다른 용의자: 기사 근거가 있는 것만, 범인과 같은 이름은 빼고 두 개까지
+  const suspects = (raw.suspects ?? [])
+    .map((item) => {
+      const sources = resolveEvidence(item.evidence, headlines)
+      return { title: item.title, tag: item.tag, outletCount: countOutlets(sources), source: sources[0] ?? null }
+    })
+    .filter((item) => item.outletCount > 0 && item.title !== culprit?.title)
+    .slice(0, 2)
 
   // 범인이 이미 쓴 기사와 분류에서 시작해, 같은 얘기를 되풀이하는 소식을 걸러낸다
   const usedTags = new Set(culprit && SINGLE_TOPIC_TAGS.has(culprit.tag) ? [culprit.tag] : [])
@@ -225,6 +275,8 @@ export function shapeBriefing(raw, kospi, headlines) {
     culprit,
     quietMessage: culprit ? null : raw.quietMessage || '기사들이 한목소리로 말하는 원인은 없었어요.',
     items,
+    suspects,
+    footprints: buildFootprints(kospi),
     headlineCount: headlines.length,
     changeRate: kospi.changeRate,
     marketState: kospi.marketState,
@@ -245,7 +297,7 @@ const kstNow = (date = new Date()) => {
 // 그날 확정된 결과를 파일로 남긴다. 프로젝트 폴더에 못 쓰는 환경(서버리스)에서는 임시 폴더를 쓴다.
 const CACHE_DIRS = [path.join(process.cwd(), '.cache'), path.join(tmpdir(), 'petfolio-cache')]
 // 프롬프트나 결과 형식을 바꾸면 이 숫자를 올린다. 예전 형식의 저장 결과를 다시 쓰지 않게 된다.
-const CACHE_VERSION = 3
+const CACHE_VERSION = 4
 const cacheFile = (dir, day) => path.join(dir, `briefing-v${CACHE_VERSION}-${day}.json`)
 
 async function readSettled(day) {

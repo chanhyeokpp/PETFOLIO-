@@ -13,7 +13,7 @@ const US_SESSION_SECONDS = 6.5 * 60 * 60
 // "평소 움직임"을 재는 기간(거래일).
 const TYPICAL_WINDOW_DAYS = 20
 
-async function fetchDailyBars(symbol) {
+export async function fetchDailyBars(symbol) {
   try {
     const response = await fetch(`${CHART_URL}/${encodeURIComponent(symbol)}?range=2mo&interval=1d`, {
       headers: { 'User-Agent': 'Mozilla/5.0 petfolio-pm-day/1.0' },

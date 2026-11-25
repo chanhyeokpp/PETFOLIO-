@@ -354,3 +354,80 @@ h1,.screen-title,.culprit-card strong,.news-body > strong,.news-body a { word-br
 .fishing-again { justify-self: start; margin-top: 2px; padding: 7px 12px; color: #1f6d59; background: #e7f8f2; border: 1px solid #bfe7da; border-radius: 999px; font-size: 13px; font-weight: 800; cursor: pointer; }
 .fishing-again:hover { background: #d8f3ea; }
 @media (prefers-reduced-motion: reduce) { .scene-hotspot.action { animation: none; } }
+
+/* 오늘의 범인 수사: 맞히기 → 범인 · 확신도 · 숫자 발자국 · 다른 용의자 */
+.guess-card { background: linear-gradient(160deg,#fffaf0,#fff); border-color: #f1e4c8; }
+.guess-card .culprit-label { color: #b27a1d; }
+.guess-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 6px; }
+.guess-choice { display: grid; justify-items: center; gap: 3px; padding: 14px 8px 12px; color: #2b2f36; background: #fff; border: 1px solid #ecdfc4; border-radius: 18px; cursor: pointer; font: inherit; transition: transform .15s, border-color .15s, box-shadow .15s; }
+.guess-choice:hover, .guess-choice:focus-visible { transform: translateY(-2px); border-color: #e0b866; box-shadow: 0 10px 24px rgba(178,122,29,.14); }
+.guess-choice > span { font-size: 28px; line-height: 1.1; }
+.guess-choice b { font-size: 14px; font-weight: 850; word-break: keep-all; }
+.guess-choice small { color: #8a8f95; font-size: 11.5px; line-height: 1.35; text-align: center; word-break: keep-all; }
+.guess-skip { justify-self: center; }
+.guess-feedback { margin: 0; padding: 12px 16px; border-radius: 16px; font-size: 14.5px; font-weight: 750; line-height: 1.55; word-break: keep-all; }
+.guess-feedback.right { color: #1f6d59; background: #dff7ef; }
+.guess-feedback.close { color: #6b5418; background: #fff3d1; }
+.guess-feedback.other { color: #46505a; background: #eef1f4; }
+.culprit-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.confidence { padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 850; }
+.confidence.strong { color: #1f6d59; background: #dff7ef; }
+.confidence.likely { color: #6b5418; background: #fff3d1; }
+.confidence.unclear { color: #5c6470; background: #e9edf1; }
+.culprit-card p.confidence-note { color: #7b8086; font-size: 13px; }
+.case-block { display: grid; gap: 7px; padding-top: 10px; border-top: 1px dashed rgba(32,33,38,.1); }
+.case-label { color: #7b8086; font-size: 12px; font-weight: 850; letter-spacing: .03em; }
+.footprints, .suspects { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.footprints li, .suspects li { display: grid; grid-template-columns: 24px 1fr auto; align-items: center; gap: 8px; padding: 8px 12px; color: #3c4248; background: rgba(255,255,255,.85); border: 1px solid rgba(32,33,38,.06); border-radius: 12px; font-size: 14px; font-weight: 700; }
+.footprints li b { font-size: 12px; font-weight: 850; }
+.footprints li.agrees b { color: #1f7f68; }
+.footprints li.against b { color: #c26a3a; }
+.footprints li.calm { opacity: .62; }
+.footprints li.calm b { color: #8a8f95; }
+.suspects li { color: #5c6470; background: rgba(255,255,255,.6); border-style: dashed; }
+.suspects li small { color: #8a8f95; font-size: 12px; }
+.fog-card { background: linear-gradient(170deg,#eef1f3,#f8f9fa); }
+.fog-card .culprit-label { color: #67717c; }
+@media (max-width: 560px) {
+  .guess-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* 낚시 카드: 파도 · 기대와 우려 · 추천 아님 */
+.fishing-wave { display: grid; gap: 8px; padding: 10px 12px; background: #f3f7fa; border-radius: 14px; }
+.fishing-wave p { margin: 0; font-size: 13px; color: #4e5660; line-height: 1.5; }
+.fishing-wave ol { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; height: 64px; margin: 0; padding: 0; list-style: none; }
+.fishing-wave li { display: grid; grid-template-rows: 1fr auto; align-items: end; justify-items: center; gap: 3px; min-height: 0; }
+.fishing-wave li i { display: block; width: 70%; border-radius: 6px 6px 3px 3px; background: #ff8f7e; }
+.fishing-wave li.down i { background: #7fa9ee; }
+.fishing-wave li small { color: #8a8f95; font-size: 10.5px; }
+.fishing-why { font-weight: 700; color: #2b2f36; }
+.fishing-sides { display: grid; gap: 6px; }
+.fishing-sides p { display: grid; grid-template-columns: auto 1fr; gap: 8px; margin: 0; padding: 8px 10px; border-radius: 12px; font-size: 13px; line-height: 1.5; color: #46505a; }
+.fishing-sides b { font-size: 12px; font-weight: 850; }
+.fishing-sides .hope { background: #fff1ee; }
+.fishing-sides .hope b { color: #d0644f; }
+.fishing-sides .worry { background: #edf3fd; }
+.fishing-sides .worry b { color: #3f72c2; }
+.fishing-disclaimer { margin: 0; color: #8a8f95; font-size: 12px; line-height: 1.5; }
+
+/* 보물상자: 날짜순 / 원인별 도감, 비슷했던 날 */
+.shell-tabs { display: inline-flex; gap: 4px; align-self: flex-start; padding: 3px; background: #f4ece0; border-radius: 12px; }
+.shell-tabs button { padding: 6px 12px; color: #8a6d50; background: transparent; border: 0; border-radius: 9px; font: inherit; font-size: 12.5px; font-weight: 800; cursor: pointer; }
+.shell-tabs button.on { color: #4a3520; background: #fff; box-shadow: 0 2px 6px rgba(91,63,37,.12); }
+.shell-pages { display: grid; gap: 10px; }
+.shell-page { display: grid; gap: 7px; }
+.shell-page h3 { display: flex; align-items: baseline; gap: 6px; margin: 0; color: #4a3520; font-size: 14px; }
+.shell-page h3 small { color: #a08a72; font-size: 11.5px; font-weight: 700; }
+.shell-page h3 b { margin-left: auto; color: #b27a1d; font-size: 13px; }
+.shell-page.missing h3 { color: #a08a72; font-size: 12.5px; }
+.shell-page.missing ul { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.shell-page.missing li { padding: 5px 10px; color: #a8957f; background: rgba(255,255,255,.6); border: 1px dashed #e3d5bf; border-radius: 999px; font-size: 12px; font-weight: 750; }
+.shell-similar { display: grid; gap: 6px; margin-top: 4px; padding-top: 10px; border-top: 1px dashed #eadfcd; }
+.shell-similar > span { color: #7d6a58; font-size: 12px; font-weight: 800; }
+.shell-similar ul { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.shell-similar li button { display: grid; grid-template-columns: 26px 1fr auto; align-items: center; gap: 8px; width: 100%; padding: 5px 8px; color: #3c3228; background: #fffaf2; border: 1px solid #f0e6d6; border-radius: 10px; font: inherit; font-size: 12.5px; font-weight: 700; text-align: left; cursor: pointer; }
+.shell-similar li button:hover { border-color: #e6c99a; }
+.shell-similar .shell-icon { width: 24px; height: 22px; }
+.shell-similar li small { color: #9a7b5c; font-size: 11.5px; }
+.shell-detail .shell-similar p { color: #8a6d50; font-size: 12px; }
+.scene-info { max-height: calc(100% - 40px); overflow-y: auto; overscroll-behavior: contain; }

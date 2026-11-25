@@ -77,6 +77,27 @@ const DEMO_MOVERS = [
   { name: '예시중공업', changePercent: 4.4 },
 ]
 
+// 낚은 종목의 파도: 평소 하루에 얼마나 움직이는지, 오늘은 그 몇 배인지, 최근 5일 흐름.
+function FishingWave({ wave, changePercent }) {
+  if (!wave || !Number.isFinite(wave.typicalMove)) return null
+  const peak = Math.max(...wave.recent.map((value) => Math.abs(value)), 0.5)
+  const multiple = Number.isFinite(wave.unusual) ? wave.unusual : null
+  const verdict = multiple === null ? '' : multiple >= 1.5 ? `오늘은 평소의 ${multiple.toFixed(1)}배로 출렁였어요.` : multiple < 0.8 ? '오늘은 평소보다 잔잔했어요.' : '오늘은 평소만큼 움직였어요.'
+  return (
+    <div className="fishing-wave">
+      <p>이 종목은 평소 하루에 <b>±{wave.typicalMove.toFixed(1)}%</b>쯤 움직여요. {Number.isFinite(changePercent) && verdict}</p>
+      <ol aria-label="최근 5일 등락">
+        {wave.recent.map((value, index) => (
+          <li key={index} className={value < 0 ? 'down' : 'up'} title={`${value > 0 ? '+' : ''}${value}%`}>
+            <i style={{ height: `${Math.max(8, (Math.abs(value) / peak) * 100)}%` }} />
+            <small>{index === wave.recent.length - 1 ? '오늘' : `${wave.recent.length - 1 - index}일 전`}</small>
+          </li>
+        ))}
+      </ol>
+    </div>
+  )
+}
+
 function App() {
   const [screen, setScreen] = useState(getInitialScreen)
   const [marketId, setMarketId] = useState(() => readStored(STORAGE_KEYS.market) ?? 'kospi')
@@ -264,10 +285,15 @@ function App() {
     const index = choices[Math.floor(Math.random() * choices.length)]
     const mover = movers[index]
     setFishing({ phase: 'cast', index, news: undefined })
-    fetch(`/api/stock-news?name=${encodeURIComponent(mover.name)}`)
+    const query = new URLSearchParams({ name: mover.name })
+    if (mover.code) query.set('code', mover.code)
+    if (Number.isFinite(mover.changePercent)) query.set('change', String(mover.changePercent))
+    fetch(`/api/stock-news?${query}`)
       .then((response) => (response.ok ? response.json() : null))
       .catch(() => null)
-      .then((data) => setFishing((current) => (current?.index === index ? { ...current, news: data?.items ?? [] } : current)))
+      .then((data) => setFishing((current) => (current?.index === index
+      ? { ...current, news: data?.items ?? [], wave: data?.wave ?? null, take: data?.take ?? null }
+      : current)))
     // 입질 시점은 장면이 정한다(걸어가기·던지기·기다리기 뒤). 장면이 멈춰 있을 때를 대비한 안전장치만 둔다
     fishingTimer.current = window.setTimeout(() => hookFish(index), 30000)
   }
@@ -278,6 +304,10 @@ function App() {
       : current))
   }
   const caughtMover = fishing ? movers[fishing.index] : null
+  // 뚜렷한 범인이 없는 날: 섬에 안개가 낀다 (예시 화면에서는 보합일 때)
+  const isFoggy = ['rise', 'flat', 'fall'].includes(marketState) && (dataMode === 'live'
+    ? briefing !== undefined && briefing !== null && !briefing.culprit
+    : marketState === 'flat')
 
   // 누른 대상의 숫자, 장면에서의 의미, 관련 뉴스
   // 포리가 오늘 가 있을 곳: 실제 데이터면 오늘의 범인, 시연 중이면 가장 크게 움직인 원인
@@ -535,6 +565,7 @@ function App() {
                   color: FISH_COLORS[fishing.index % FISH_COLORS.length],
                 } : null}
                 onFishingCaught={() => hookFish()}
+                foggy={isFoggy}
               />
             ) : (
             <Pori3D marketState={marketState} touchSignal={reactionTick} waterLevel={tradingActivity} volatility={volatility}
@@ -575,6 +606,14 @@ function App() {
                 </b>
               </div>
               <p>오늘 거래가 많았던 종목 가운데 크게 움직인 녀석이에요.</p>
+              <FishingWave wave={fishing.wave} changePercent={caughtMover.changePercent} />
+              {fishing.take?.why && <p className="fishing-why">{fishing.take.why}</p>}
+              {(fishing.take?.hope || fishing.take?.worry) && (
+                <div className="fishing-sides">
+                  <p className="hope"><b>기대</b>{fishing.take.hope ?? '기사 제목에선 뚜렷한 기대 요인이 보이지 않았어요.'}</p>
+                  <p className="worry"><b>우려</b>{fishing.take.worry ?? '기사 제목에선 뚜렷한 우려 요인이 보이지 않았어요.'}</p>
+                </div>
+              )}
               {fishing.news === undefined && <p className="fishing-wait">이 종목 소식을 찾는 중이에요…</p>}
               {fishing.news?.length === 0 && <p className="fishing-wait">최근 이 종목 소식은 찾지 못했어요.</p>}
               {fishing.news?.length > 0 && (
@@ -587,6 +626,7 @@ function App() {
                   ))}
                 </ul>
               )}
+              <p className="fishing-disclaimer">오늘 화제였을 뿐, 사라는 뜻이 아니에요. 화제 종목은 평소보다 크게 출렁이기 쉬워요.</p>
               <button type="button" className="fishing-again" onClick={startFishing}>🎣 한 번 더 낚기</button>
             </aside>
           ) : picked === 'chest' ? (

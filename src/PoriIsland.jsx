@@ -572,6 +572,8 @@ export default function PoriIsland({
   fishing = null,
   // called when the fish bites, so the screen can show the catch in time with the scene
   onFishingCaught = null,
+  // no clear culprit today: the sea is wrapped in fog
+  foggy = false,
 }) {
   const hostRef = useRef(null)
   const hotspotRefs = useRef({})
@@ -581,7 +583,7 @@ export default function PoriIsland({
   useEffect(() => {
     dataRef.current = {
       marketState, waterLevel, volatility, foreign: foreignFlow, institution: institutionFlow,
-      overnight, wind, samsung, hynix, fish, focus, selected, chestNew, fishing, onFishingCaught,
+      overnight, wind, samsung, hynix, fish, focus, selected, chestNew, fishing, onFishingCaught, foggy,
     }
   })
 
@@ -608,6 +610,8 @@ export default function PoriIsland({
     const daySky = new THREE.Color(PALETTE.daySky)
     const nightSky = new THREE.Color(PALETTE.nightSky)
     const skyColor = daySky.clone()
+    const fogTint = new THREE.Color('#c9d3d8')
+    let fogAmount = 0
     scene.background = skyColor
     scene.fog = new THREE.Fog(skyColor, 13, 27)
     const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 80)
@@ -990,8 +994,7 @@ export default function PoriIsland({
       // narrow screens may crop the far water a little rather than shrink the island too much
       view.distance = Math.max(8.6 / 2 / halfFov, (camera.aspect < 1 ? 10.5 : 13.5) / 2 / (halfFov * camera.aspect))
       // the horizon fades a fixed way past the island, however far the camera sits
-      scene.fog.near = view.distance - 3
-      scene.fog.far = view.distance + 11
+      // the loop pulls these in further on foggy days
       camera.updateProjectionMatrix()
     }
     const resizeObserver = new ResizeObserver(resize)
@@ -1541,7 +1544,12 @@ export default function PoriIsland({
 
       // --- night ---
       skyColor.lerpColors(daySky, nightSky, night)
+      // fog: no clear culprit today. The horizon closes in and the sky greys a little.
+      fogAmount = damp(fogAmount, input.foggy ? 1 : 0, 1.2, dt)
+      skyColor.lerp(fogTint, fogAmount * 0.4 * (1 - night * 0.6))
       scene.fog.color.copy(skyColor)
+      scene.fog.near = view.distance - 3 + fogAmount * 1.5
+      scene.fog.far = view.distance + 11 - fogAmount * 6
       sea.material.color.lerpColors(dayTint, nightTint, night)
       hemi.intensity = 1.6 - night * 0.7
       key.intensity = 1.55 - night * 0.9
