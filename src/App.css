@@ -733,3 +733,44 @@ body:has(.full-scene) { overflow-x: clip; }
 /* 포리 들어서 옮기기 */
 .scene-hotspot[aria-label^="포리 쓰다듬기"] { cursor: grab; touch-action: none; }
 .scene-hotspot[aria-label^="포리 쓰다듬기"]:active { cursor: grabbing; }
+
+/* ---------- 오늘의 시황: 사건 카드 한 장 (결과 · 범인 · 탭) ---------- */
+.board { --accent: #7b8086; display: grid; overflow: hidden; background: #fff; border: 1px solid #e6ebee; border-radius: 28px; box-shadow: 0 18px 50px rgba(36, 70, 93, .08); }
+.board.rise { --accent: #e5533d; }
+.board.fall { --accent: #2f6fd1; }
+.result-hero.inset { min-height: 0; padding: 20px 24px calc(34px + var(--level) * 34px); border-radius: 0; }
+.result-hero.inset .hero-number strong { font-size: clamp(40px, 7vw, 54px); }
+.result-hero.inset .hero-sea { height: calc(28px + var(--level) * 34px); }
+.board-notice { margin: 0; padding: 10px 24px; color: #46505a; background: #f3f6f8; border-bottom: 1px solid #eef1f4; font-size: 13px; font-weight: 700; line-height: 1.5; word-break: keep-all; }
+.board-body { display: grid; gap: 12px; padding: 20px 24px; }
+.board .guess-step { padding: 0; background: none; border: 0; border-radius: 0; }
+.board .wanted { padding: 0; background: none; border: 0; border-radius: 0; box-shadow: none; animation: rise-in .45s both; }
+.board .stamp { top: 0; right: 0; }
+.board .fog-case { margin: -4px -8px 0; }
+.board-tabs { display: grid; border-top: 1px solid #eef1f4; }
+.tab-row { display: flex; gap: 4px; padding: 10px 16px 0; overflow-x: auto; }
+.tab-row button { display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; color: #7b8086; background: none; border: 0; border-bottom: 2.5px solid transparent; font: inherit; font-size: 14px; font-weight: 800; white-space: nowrap; cursor: pointer; transition: color .15s, border-color .15s; }
+.tab-row button b { padding: 1px 7px; color: #6b7279; background: #f1f3f5; border-radius: 999px; font-size: 11.5px; }
+.tab-row button.on { color: #1f2126; border-bottom-color: var(--accent); }
+.tab-row button.on b { color: #fff; background: var(--accent); }
+.board-panel { min-height: 170px; padding: 16px 24px 20px; animation: rise-in .3s both; }
+.board-panel .bars-block, .board-panel .chips-block { padding: 0; background: none; border: 0; border-radius: 0; }
+.board-panel .news-mini details { border-color: #eef1f4; }
+.board-panel .sample-badge { justify-self: start; }
+@media (max-width: 520px) {
+  .board { border-radius: 22px; }
+  .board-body, .board-panel { padding-left: 18px; padding-right: 18px; }
+  .result-hero.inset { padding: 16px 18px calc(30px + var(--level) * 30px); }
+  .board-notice { padding: 10px 18px; }
+}
+.result-hero.inset.compact { padding: 14px 24px; border-radius: 0; }
+.result-hero.inset.compact .hero-number strong { font-size: 30px; }
+/* 사건 카드가 길어져도 "포리 보러 가기"는 늘 화면 아래에 */
+.news-screen > .primary-button { position: sticky; z-index: 5; bottom: 16px; box-shadow: 0 10px 28px rgba(31, 127, 104, .28); }
+@media (max-width: 520px) {
+  /* 폰에선 원인 흐름을 위에서 아래로: 줄바꿈된 줄 앞에 점선이 덩그러니 남지 않게 */
+  .cause-flow { flex-direction: column; align-items: flex-start; row-gap: 0; }
+  .cause-flow li { flex-direction: column; align-items: flex-start; }
+  .flow-line { width: 3px; height: 14px; margin: 3px 0 3px 22px; background-image: linear-gradient(180deg, #9aa1a8 50%, transparent 50%); background-size: 3px 10px; animation: dash-flow-down .6s linear infinite; }
+  @keyframes dash-flow-down { to { background-position: 0 10px; } }
+}

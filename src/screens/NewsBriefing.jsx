@@ -39,7 +39,7 @@ function useCountUp(target, ms = 900) {
 const toneOf = (changeRate) => (!Number.isFinite(changeRate) || Math.abs(changeRate) < 0.3 ? 'flat' : changeRate > 0 ? 'rise' : 'fall')
 
 // ---------- 결과: 큰 숫자, 화살표, 크기만큼 높아지는 파도 ----------
-function ResultHero({ changeRate, label = '오늘 코스피', note = null, compact = false }) {
+function ResultHero({ changeRate, label = '오늘 코스피', note = null, compact = false, inset = false }) {
   const shown = useCountUp(changeRate)
   const tone = toneOf(changeRate)
   const size = Number.isFinite(changeRate) ? Math.abs(changeRate) : 0
@@ -47,7 +47,7 @@ function ResultHero({ changeRate, label = '오늘 코스피', note = null, compa
   // 파도 높이와 빠르기: 많이 움직인 날일수록 높고 빠르게
   const level = Math.min(1, size / 5)
   return (
-    <section className={`result-hero ${tone} ${compact ? 'compact' : ''}`} style={{ '--level': level }} aria-label={`${label} ${Number.isFinite(changeRate) ? signed(changeRate) : ''}`}>
+    <section className={`result-hero ${tone} ${compact ? 'compact' : ''} ${inset ? 'inset' : ''}`} style={{ '--level': level }} aria-label={`${label} ${Number.isFinite(changeRate) ? signed(changeRate) : ''}`}>
       <div className="hero-text">
         <small>{label}</small>
         <div className="hero-number">
@@ -249,41 +249,73 @@ function FogCard({ quietTitle, quietMessage }) {
   )
 }
 
-// ---------- 하루치 사건: 결과 → (맞히기) → 범인 → 숫자 → 다른 용의자 ----------
-function DayCase({ briefing, changeRate, label, note }) {
-  const { culprit, footprints, suspects } = briefing
+// ---------- 하루치 사건을 카드 한 장에: 결과 → (맞히기) → 범인 → 탭(증거 · 용의자 · 소식) ----------
+function CaseBoard({ briefing, changeRate, label = '오늘 코스피', notice = null, sample = false }) {
+  const { culprit, footprints, suspects, items } = briefing
   const tone = toneOf(changeRate)
   const [guess, setGuess] = useState(culprit ? null : 'skipped')
+  const [tab, setTab] = useState('evidence')
+  const revealed = guess !== null
   const result = Number.isFinite(changeRate) ? `코스피 ${signed(changeRate)}` : null
   const feedback = guess && guess !== 'skipped' ? guessFeedback(guess, culprit) : null
+  const tabs = [
+    { key: 'evidence', label: '증거', count: null, show: footprints?.length > 0 },
+    { key: 'suspects', label: culprit ? '다른 용의자' : '기사 속 후보', count: suspects?.length, show: suspects?.length > 0 },
+    { key: 'news', label: '알아둘 소식', count: items?.length, show: items?.length > 0 },
+  ].filter((item) => item.show)
+  const active = tabs.find((item) => item.key === tab)?.key ?? tabs[0]?.key
+
   return (
-    <>
-      <ResultHero changeRate={changeRate} label={label} note={note} />
-      {guess === null ? (
-        <GuessStep choices={buildChoices(culprit, footprints)} onPick={setGuess} />
-      ) : (
-        <div className="case-reveal">
-          {feedback && <p className={`guess-toast ${feedback.tone}`} role="status">{feedback.text}</p>}
-          {culprit
-            ? <WantedCard culprit={culprit} result={result} tone={tone} />
-            : <FogCard quietTitle={briefing.quietTitle} quietMessage={briefing.quietMessage} />}
-          <FootprintBars footprints={footprints} tone={tone} />
-          <SuspectChips suspects={suspects} label={culprit ? '다른 용의자' : '기사에 나온 후보'} />
+    <section className={`board ${tone}`} aria-label="오늘의 사건">
+      <ResultHero changeRate={changeRate} label={label} inset compact={revealed} />
+      {notice && <p className="board-notice">{notice}</p>}
+      <div className="board-body">
+        {!revealed ? (
+          <GuessStep choices={buildChoices(culprit, footprints)} onPick={setGuess} />
+        ) : (
+          <>
+            {feedback && <p className={`guess-toast ${feedback.tone}`} role="status">{feedback.text}</p>}
+            {culprit
+              ? <WantedCard culprit={culprit} result={result} tone={tone} />
+              : <FogCard quietTitle={briefing.quietTitle} quietMessage={briefing.quietMessage} />}
+          </>
+        )}
+      </div>
+      {revealed && tabs.length > 0 && (
+        <div className="board-tabs">
+          <div className="tab-row" role="tablist" aria-label="더 보기">
+            {tabs.map((item) => (
+              <button
+                key={item.key} type="button" role="tab" aria-selected={active === item.key}
+                className={active === item.key ? 'on' : ''} onClick={() => setTab(item.key)}
+              >
+                {item.label}{item.count ? <b>{item.count}</b> : null}
+              </button>
+            ))}
+          </div>
+          <div className="board-panel" role="tabpanel" key={active}>
+            {active === 'evidence' && <FootprintBars footprints={footprints} tone={tone} />}
+            {active === 'suspects' && <SuspectChips suspects={suspects} label={culprit ? '기사들이 함께 짚은 다른 원인' : '기사에 나온 후보'} />}
+            {active === 'news' && <NewsMini items={items} sample={sample} bare />}
+          </div>
         </div>
       )}
-    </>
+    </section>
   )
 }
 
 // ---------- 소식: 한 줄씩, 누르면 펼친다 ----------
-function NewsMini({ items, sample = false }) {
+function NewsMini({ items, sample = false, bare = false }) {
   if (!items?.length) return null
   return (
     <section className="news-mini" aria-label="알아둘 소식">
-      <div className="block-head">
-        <span className="block-label">알아둘 소식</span>
-        {sample && <span className="sample-badge">예시 · 실제 기사 아님</span>}
-      </div>
+      {!bare && (
+        <div className="block-head">
+          <span className="block-label">알아둘 소식</span>
+          {sample && <span className="sample-badge">예시 · 실제 기사 아님</span>}
+        </div>
+      )}
+      {bare && sample && <span className="sample-badge">예시 · 실제 기사 아님</span>}
       <ol>
         {items.map((item, index) => {
           const tag = SCENE_TAGS[item.tag] ?? SCENE_TAGS.other
@@ -324,11 +356,13 @@ function LiveFacts({ changeRate, flows, drivers, message }) {
     notable: Boolean(fact.note && fact.note !== '평소보다 잔잔'),
   }))
   return (
-    <>
-      <ResultHero changeRate={changeRate} />
-      <p className="case-banner">{message}</p>
-      <FootprintBars footprints={footprints} tone={toneOf(changeRate)} />
-    </>
+    <section className={`board ${toneOf(changeRate)}`} aria-label="오늘 움직인 것">
+      <ResultHero changeRate={changeRate} inset />
+      <p className="board-notice">{message}</p>
+      <div className="board-body">
+        <FootprintBars footprints={footprints} tone={toneOf(changeRate)} />
+      </div>
+    </section>
   )
 }
 
@@ -354,22 +388,13 @@ export default function NewsBriefing({
 
       {isLoading && <ResultHero changeRate={NaN} label={`${characterName}가 소식을 모으는 중이에요`} />}
 
-      {!isLoading && hasAiBriefing && (
-        <>
-          <DayCase briefing={briefing} changeRate={changeRate} />
-          <NewsMini items={briefing.items} />
-        </>
-      )}
+      {!isLoading && hasAiBriefing && <CaseBoard briefing={briefing} changeRate={changeRate} />}
 
       {!isLoading && waitingForClose && (
-        <>
-          {liveDay && <ResultHero changeRate={changeRate} label="지금 코스피" compact />}
-          <p className="case-banner">
-            {marketState === 'closed' ? '오늘은 장이 쉬어요.' : '오늘의 범인은 오후 4시쯤 밝혀져요.'} 그동안 지난 거래일({formatDay(previous.day)}) 이야기를 보여드려요.
-          </p>
-          <DayCase briefing={previous.briefing} changeRate={previous.changeRate} label={`${formatDay(previous.day)} 코스피`} />
-          <NewsMini items={previous.briefing.items} />
-        </>
+        <CaseBoard
+          briefing={previous.briefing} changeRate={previous.changeRate} label={`${formatDay(previous.day)} 코스피`}
+          notice={`${marketState === 'closed' ? '오늘은 장이 쉬어요' : `지금 코스피 ${liveDay ? signed(changeRate) : ''} · 오늘의 범인은 오후 4시쯤 밝혀져요`}. 그동안 지난 거래일(${formatDay(previous.day)}) 이야기예요.`}
+        />
       )}
 
       {!isLoading && liveDay && !hasAiBriefing && !waitingForClose && (
@@ -380,12 +405,7 @@ export default function NewsBriefing({
       )}
 
       {!isLoading && !isLive && sample && (
-        <>
-          {sample.culprit || sample.footprints
-            ? <DayCase briefing={sample} changeRate={changeRate} />
-            : <ResultHero changeRate={changeRate} />}
-          <NewsMini items={sample.items} sample />
-        </>
+        <CaseBoard briefing={sample} changeRate={changeRate} sample />
       )}
 
       {!isLoading && !hasAiBriefing && !waitingForClose && !liveDay && !(isLive === false && sample) && (
