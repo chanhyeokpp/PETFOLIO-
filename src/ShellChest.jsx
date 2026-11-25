@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { pageOf, SAMPLE_SHELLS, SHELL_PAGES, similarDays, sortShells } from './domain/shells'
+import { pageOf, SAMPLE_SHELLS, SHELL_PAGES, similarDays, sortShells, VERDICTS } from './domain/shells'
 
 const SHELL_COLORS = { rise: '#ff9f8f', fall: '#8fb8f5', flat: '#f3dcae' }
 const RESULT_WORD = { rise: '올랐어요', fall: '내렸어요', flat: '보합이었어요' }
@@ -22,14 +22,20 @@ const formatDay = (day) => {
 }
 const formatRate = (rate) => (Number.isFinite(rate) ? `코스피 ${rate > 0 ? '+' : ''}${rate.toFixed(2)}%` : '')
 
-function ShellButton({ shell, active, onPick, showPage = false }) {
+const signed = (rate) => `${rate > 0 ? '+' : ''}${rate.toFixed(2)}%`
+
+function ShellButton({ shell, active, onPick, showPage = false, fresh = false, trial = null }) {
+  const verdict = trial ? VERDICTS[trial.verdict] : null
   return (
     <button
       type="button"
-      className={`shell-item ${active ? 'on' : ''}`}
+      className={`shell-item ${active ? 'on' : ''} ${fresh ? 'fresh' : ''}`}
       onClick={() => onPick(shell.day)}
       aria-pressed={active}
     >
+      {fresh && <em className="shell-badge fresh">NEW</em>}
+      {!fresh && verdict && <em className="shell-badge" title={verdict.label}>{verdict.icon}</em>}
+      {!fresh && !verdict && shell.status === 'ready' && <em className="shell-badge" title="재판을 열 수 있어요">⚖️</em>}
       <ShellIcon marketState={shell.marketState} />
       <small>{showPage && <span aria-hidden="true">{pageOf(shell).icon} </span>}{formatDay(shell.day)}</small>
       <span>{shell.title}</span>
@@ -37,9 +43,73 @@ function ShellButton({ shell, active, onPick, showPage = false }) {
   )
 }
 
+// 일주일 뒤 재판: 거래일 다섯 번이 지난 조개를 다시 따져 본다. 그날 알던 것과 나중에 알게 된 것을 나눠 보여준다.
+function TrialBlock({ shell, state, onOpen }) {
+  const trial = state?.trial ?? shell.trial
+  if (trial) {
+    const verdict = VERDICTS[trial.verdict] ?? VERDICTS.unknown
+    return (
+      <div className={`shell-trial ${trial.verdict}`}>
+        <span className="trial-head">⚖️ 일주일 뒤 재판 <b>{verdict.icon} {verdict.label}</b></span>
+        <p>{trial.reason}</p>
+        {trial.later?.length > 0 && (
+          <div className="trial-later">
+            <span>그때는 몰랐던 것</span>
+            <ul>
+              {trial.later.map((item) => (
+                <li key={item.text}>
+                  {item.text}
+                  {item.sources?.length > 0 && (
+                    <small>
+                      {item.sources.map((source, index) => (
+                        <span key={source.link}>
+                          {index > 0 && ' · '}
+                          <a href={source.link} target="_blank" rel="noopener noreferrer">{source.source || '기사'}{source.day && ` ${formatDay(source.day)}`}</a>
+                        </span>
+                      ))}
+                    </small>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {trial.afterwards?.length > 0 && (
+          <div className="trial-after">
+            <span>그 뒤 거래일</span>
+            <ol>
+              {trial.afterwards.map((item) => (
+                <li key={item.day}>
+                  <small>{formatDay(item.day)}</small>
+                  <b className={item.changeRate < 0 ? 'down' : 'up'}>{signed(item.changeRate)}</b>
+                  <span>{item.title}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+        {trial.lesson && <p className="trial-lesson">💡 {trial.lesson}</p>}
+      </div>
+    )
+  }
+  if (state === 'loading') return <p className="shell-trial waiting">⚖️ 포리가 그 뒤 기록과 기사를 다시 읽고 있어요…</p>
+  if (state?.error) return <p className="shell-trial waiting">⚖️ 재판을 열지 못했어요. 잠시 뒤 다시 해 주세요.</p>
+  if (shell.status === 'ready') {
+    return (
+      <button type="button" className="trial-open" onClick={() => onOpen(shell.day)}>
+        ⚖️ 일주일이 지났어요. 이 설명, 지금 봐도 맞을까요? <b>재판 열기</b>
+      </button>
+    )
+  }
+  if (shell.status === 'waiting') {
+    return <p className="shell-trial waiting">⚖️ 거래일 {shell.daysLeft}일이 더 지나면 이 조개를 다시 따져 볼게요.</p>
+  }
+  return null
+}
+
 // 포리의 보물상자: 날짜순으로 보거나, 범인이 있던 섬의 장소별(도감)로 본다.
 // 조개를 누르면 그날 이야기와 "비슷했던 날"이 함께 나온다.
-export default function ShellChest({ shells, onClose }) {
+export default function ShellChest({ shells, freshDays = [], onClose }) {
   const real = sortShells(shells)
   const isSample = real.length === 0
   const list = isSample ? SAMPLE_SHELLS : real
@@ -48,6 +118,22 @@ export default function ShellChest({ shells, onClose }) {
   const active = list.find((shell) => shell.day === activeDay) ?? null
   const similar = active ? similarDays(active, list) : null
   const pages = SHELL_PAGES.map((page) => ({ ...page, shells: list.filter((shell) => pageOf(shell) === page) }))
+  // 재판 결과: day → 'loading' | { trial } | { error }
+  const [trials, setTrials] = useState({})
+  const fresh = new Set(isSample ? [] : freshDays)
+  const trialOf = (shell) => trials[shell.day]?.trial ?? shell.trial ?? null
+  const readyCount = list.filter((shell) => shell.status === 'ready' && !trialOf(shell)).length
+
+  const openTrial = (day) => {
+    setTrials((current) => ({ ...current, [day]: 'loading' }))
+    fetch(`/api/trial?day=${day}`)
+      .then((response) => (response.ok ? response.json() : null))
+      .catch(() => null)
+      .then((data) => setTrials((current) => ({ ...current, [day]: data?.trial ? { trial: data.trial } : { error: data?.status ?? 'failed' } })))
+  }
+  const buttonProps = (shell) => ({
+    shell, active: shell.day === activeDay, onPick: setActiveDay, fresh: fresh.has(shell.day), trial: trialOf(shell),
+  })
 
   return (
     <aside className="shell-chest" aria-label="포리의 보물상자">
@@ -59,8 +145,11 @@ export default function ShellChest({ shells, onClose }) {
       <p className="shell-note">
         {isSample
           ? '아직 모은 조개가 없어서 예시 조개를 보여드려요. 장이 열린 날 들르면 포리가 그날의 조개를 주워 와요.'
-          : '장이 열린 날마다 포리가 그날 시장을 움직인 이야기를 조개로 주워 와요.'}
+          : fresh.size > 0
+            ? `포리가 새로 주워 온 조개가 ${fresh.size}개 있어요. 들르지 않은 날 것도 포리가 대신 챙겨 뒀어요.`
+            : '장이 열린 날마다 포리가 그날 시장을 움직인 이야기를 조개로 주워 와요.'}
       </p>
+      {readyCount > 0 && <p className="shell-note trial-count">⚖️ 일주일이 지나 다시 따져 볼 수 있는 조개가 {readyCount}개 있어요.</p>}
       <div className="shell-tabs" role="tablist" aria-label="보는 방식">
         <button type="button" role="tab" aria-selected={view === 'days'} className={view === 'days' ? 'on' : ''} onClick={() => setView('days')}>날짜순</button>
         <button type="button" role="tab" aria-selected={view === 'pages'} className={view === 'pages' ? 'on' : ''} onClick={() => setView('pages')}>원인별 도감</button>
@@ -70,7 +159,7 @@ export default function ShellChest({ shells, onClose }) {
         <ol className="shell-grid">
           {list.map((shell) => (
             <li key={shell.day}>
-              <ShellButton shell={shell} active={shell.day === activeDay} onPick={setActiveDay} showPage />
+              <ShellButton {...buttonProps(shell)} showPage />
             </li>
           ))}
         </ol>
@@ -86,7 +175,7 @@ export default function ShellChest({ shells, onClose }) {
               <ol className="shell-grid">
                 {page.shells.map((shell) => (
                   <li key={shell.day}>
-                    <ShellButton shell={shell} active={shell.day === activeDay} onPick={setActiveDay} />
+                    <ShellButton {...buttonProps(shell)} />
                   </li>
                 ))}
               </ol>
@@ -119,6 +208,7 @@ export default function ShellChest({ shells, onClose }) {
               출처: {active.source.name || '기사 보기'}
             </a>
           )}
+          <TrialBlock shell={active} state={trials[active.day]} onOpen={openTrial} />
           {similar?.days.length > 0 && (
             <div className="shell-similar">
               <span>{similar.page.icon} {similar.page.label} 조개가 또 있어요</span>

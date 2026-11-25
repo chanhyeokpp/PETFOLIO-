@@ -3,6 +3,9 @@
 
 const STORAGE_KEY = 'petfolio.shells'
 const SEEN_KEY = 'petfolio.shellsSeen'
+// 이 날부터의 조개가 내 보물상자에 들어온다. 처음 온 날 정하고, 지난주 조개부터 주워 와서 반긴다.
+const SINCE_KEY = 'petfolio.shellsSince'
+const WELCOME_DAYS = 7
 
 const read = (key, fallback) => {
   try {
@@ -21,6 +24,30 @@ const write = (key, value) => {
 export const readShells = () => read(STORAGE_KEY, {})
 export const readSeenDay = () => read(SEEN_KEY, null)
 export const markShellsSeen = (day) => write(SEEN_KEY, day)
+
+export function readSince(today) {
+  const stored = read(SINCE_KEY, null)
+  if (stored) return stored
+  const since = new Date(Date.parse(`${today}T00:00:00Z`) - WELCOME_DAYS * 86_400_000).toISOString().slice(0, 10)
+  write(SINCE_KEY, since)
+  return since
+}
+
+// 서버 기록에서 온 조개를 이 브라우저에도 남긴다 (서버에 못 닿을 때 보여주려고)
+export function saveShells(list) {
+  const shells = readShells()
+  for (const shell of list) shells[shell.day] = shell
+  write(STORAGE_KEY, shells)
+  return shells
+}
+
+// 재판 판결
+export const VERDICTS = {
+  keep: { icon: '✅', label: '설명 유지', note: '그 뒤에 봐도 그날의 설명이 맞았어요' },
+  revise: { icon: '✏️', label: '일부 수정', note: '그 뒤에 보니 설명을 조금 고쳐야 했어요' },
+  revealed: { icon: '🔦', label: '나중에 밝혀짐', note: '안개 낀 날이었지만 그 뒤에 원인이 드러났어요' },
+  unknown: { icon: '🌫️', label: '판단 보류', note: '그 뒤 자료로도 맞는지 가리기 어려웠어요' },
+}
 
 // Turn today's briefing into a shell. Quiet days get a plain shell too: "nothing big happened" is a record.
 export function shellFromBriefing(day, briefing, changeRate, marketState) {

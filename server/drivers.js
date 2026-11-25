@@ -1,7 +1,7 @@
 // 코스피를 움직이는 "원인" 후보들: 간밤 미국 증시, 환율, 대장주.
 // Yahoo Finance 일봉 한 달치를 받아 오늘 변화율과 "평소 대비 얼마나 유난한지"를 계산한다.
 const CHART_URL = 'https://query2.finance.yahoo.com/v8/finance/chart'
-const DRIVER_SYMBOLS = {
+export const DRIVER_SYMBOLS = {
   nasdaq: { symbol: '^IXIC', label: '나스닥', group: 'us' },
   sox: { symbol: '^SOX', label: '미국 반도체', group: 'us' },
   usdkrw: { symbol: 'KRW=X', label: '원/달러 환율', group: 'fx' },
@@ -9,13 +9,13 @@ const DRIVER_SYMBOLS = {
   hynix: { symbol: '000660.KS', label: 'SK하이닉스', group: 'leader' },
 }
 // 미국 정규장 길이. 일봉의 시각은 개장 시각이라 마감 시각을 구할 때 더한다.
-const US_SESSION_SECONDS = 6.5 * 60 * 60
+export const US_SESSION_SECONDS = 6.5 * 60 * 60
 // "평소 움직임"을 재는 기간(거래일).
 const TYPICAL_WINDOW_DAYS = 20
 
-export async function fetchDailyBars(symbol) {
+export async function fetchDailyBars(symbol, range = '2mo') {
   try {
-    const response = await fetch(`${CHART_URL}/${encodeURIComponent(symbol)}?range=2mo&interval=1d`, {
+    const response = await fetch(`${CHART_URL}/${encodeURIComponent(symbol)}?range=${range}&interval=1d`, {
       headers: { 'User-Agent': 'Mozilla/5.0 petfolio-pm-day/1.0' },
       signal: AbortSignal.timeout(8000),
     })

@@ -4,17 +4,20 @@ import { fetchBriefing } from './server/briefing.js'
 import { fetchStockNews } from './server/stockNews.js'
 import { fetchKospi } from './server/kospi.js'
 import { fetchNews } from './server/news.js'
+import { fetchShells, fetchTrial } from './server/trial.js'
 
 const API_ROUTES = {
   '/api/kospi': { load: fetchKospi, error: 'MARKET_DATA_UNAVAILABLE' },
   '/api/news': { load: fetchNews, error: 'NEWS_UNAVAILABLE' },
   '/api/briefing': { load: fetchBriefing, error: 'BRIEFING_UNAVAILABLE' },
   '/api/stock-news': { load: fetchStockNews, error: 'STOCK_NEWS_UNAVAILABLE' },
+  '/api/shells': { load: fetchShells, error: 'SHELLS_UNAVAILABLE' },
+  '/api/trial': { load: fetchTrial, error: 'TRIAL_UNAVAILABLE' },
 }
 
 // .env.local의 서버용 키(OPENAI_API_KEY, KRX_AUTH_KEY)를 API 코드가 읽을 수 있게 한다.
 // VITE_ 접두사가 없어서 브라우저 코드에는 들어가지 않는다.
-for (const [key, value] of Object.entries(loadEnv('development', process.cwd(), ['OPENAI_', 'KRX_']))) {
+for (const [key, value] of Object.entries(loadEnv('development', process.cwd(), ['OPENAI_', 'KRX_', 'UPSTASH_']))) {
   process.env[key] ??= value
 }
 

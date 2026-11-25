@@ -6,7 +6,7 @@ import { SENTIMENTS } from './domain/news'
 import MarketSelect from './screens/MarketSelect'
 import NewsBriefing from './screens/NewsBriefing'
 import ShellChest from './ShellChest'
-import { markShellsSeen, readSeenDay, readShells, saveShell, shellFromBriefing } from './domain/shells'
+import { markShellsSeen, readSeenDay, readShells, readSince, saveShell, saveShells, shellFromBriefing } from './domain/shells'
 import './App.css'
 
 const Pori3D = lazy(() => import('./Pori3D'))
@@ -133,6 +133,11 @@ function App() {
   // 장면에서 누른 것(배, 날씨, 고래). null이면 말풍선을 보여준다.
   const [picked, setPicked] = useState(null)
   const [storedShells] = useState(readShells)
+  // 서버의 날짜별 기록에서 온 조개. undefined = 받는 중
+  const [serverShells, setServerShells] = useState(undefined)
+  const [shellsSince] = useState(() => readSince(getTodayKst()))
+  // 보물상자를 연 순간의 "새로 주운 조개" (열자마자 본 것으로 표시되므로 따로 잡아 둔다)
+  const [freshDays, setFreshDays] = useState([])
   // 낚시: null | { phase: 'cast' | 'caught', index, news }
   const [fishing, setFishing] = useState(null)
   const fishingTimer = useRef(null)
@@ -238,6 +243,16 @@ function App() {
       .then((response) => (response.ok ? response.json() : null))
       .catch(() => null)
       .then((data) => { if (!cancelled) setBriefing(data?.briefing ?? null) })
+    // 지난 거래일 조개: 들르지 않은 날 것도 서버 기록에서 주워 온다
+    fetch(`/api/shells?from=${readSince(getTodayKst())}`)
+      .then((response) => (response.ok ? response.json() : null))
+      .catch(() => null)
+      .then((data) => {
+        if (cancelled) return
+        const list = Array.isArray(data?.shells) ? data.shells : null
+        setServerShells(list)
+        if (list?.length) saveShells(list)
+      })
     return () => { cancelled = true }
   }, [])
 
@@ -332,7 +347,12 @@ function App() {
   const todayShell = dataMode === 'live' && briefing && marketState !== 'closed' && Number.isFinite(scenario.changeRate)
     ? shellFromBriefing(getTodayKst(), briefing, scenario.changeRate, marketState)
     : null
-  const shells = todayShell ? { ...storedShells, [todayShell.day]: todayShell } : storedShells
+  // 내 보물상자 = 처음 온 날(일주일 전부터) 이후의 조개. 서버 기록이 브라우저 기록보다 앞선다.
+  // 오늘 조개는 서버에 확정 기록이 생기기 전까지 지금 브리핑으로 만든다.
+  const shells = {}
+  for (const shell of Object.values(storedShells)) if (shell.day >= shellsSince) shells[shell.day] = shell
+  for (const shell of serverShells ?? []) if (shell.day >= shellsSince) shells[shell.day] = shell
+  if (todayShell && !serverShells?.some((shell) => shell.day === todayShell.day)) shells[todayShell.day] = todayShell
   const todayShellKey = todayShell ? `${todayShell.day}|${todayShell.generatedAt}` : null
   useEffect(() => {
     // 브라우저 저장소에 남겨두기 (화면은 위에서 이미 반영)
@@ -345,6 +365,7 @@ function App() {
 
   const pick = (name) => {
     if (name === 'chest' && latestShellDay) {
+      setFreshDays(Object.keys(shells).filter((day) => shellsSeenDay === null || day > shellsSeenDay))
       markShellsSeen(latestShellDay)
       setShellsSeenDay(latestShellDay)
     }
@@ -630,7 +651,7 @@ function App() {
               <button type="button" className="fishing-again" onClick={startFishing}>🎣 한 번 더 낚기</button>
             </aside>
           ) : picked === 'chest' ? (
-            <ShellChest shells={shells} onClose={() => setPicked(null)} />
+            <ShellChest shells={shells} freshDays={freshDays} onClose={() => setPicked(null)} />
           ) : pickedInfo ? (
             <aside className="scene-info" aria-live="polite">
               <header>

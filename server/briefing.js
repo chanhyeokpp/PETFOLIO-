@@ -1,12 +1,10 @@
 // 오늘의 범인: 그날 마감 기사 제목들이 공통으로 말하는 원인을 LLM이 고르고,
 // 우리가 가진 숫자로 그 설명이 맞는지 따로 확인한다.
 // 범인은 기사에서 나온다. 숫자는 후보를 정하지 않고 검증만 한다(특정 원인을 우대하지 않기 위해).
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import path from 'node:path'
 import { fetchKospi } from './kospi.js'
 import { collectHeadlines } from './news.js'
 import { askJson, objectSchema } from './openai.js'
+import { getRecord, putRecord } from './records.js'
 const MAX_HEADLINES = 60
 const MIN_HEADLINES = 5
 const CACHE_MS = 30 * 60 * 1000
@@ -294,29 +292,32 @@ const kstNow = (date = new Date()) => {
   return { day: `${parts.year}-${parts.month}-${parts.day}`, minutes: Number(parts.hour) * 60 + Number(parts.minute) }
 }
 
-// 그날 확정된 결과를 파일로 남긴다. 프로젝트 폴더에 못 쓰는 환경(서버리스)에서는 임시 폴더를 쓴다.
-const CACHE_DIRS = [path.join(process.cwd(), '.cache'), path.join(tmpdir(), 'petfolio-cache')]
-// 프롬프트나 결과 형식을 바꾸면 이 숫자를 올린다. 예전 형식의 저장 결과를 다시 쓰지 않게 된다.
-const CACHE_VERSION = 4
-const cacheFile = (dir, day) => path.join(dir, `briefing-v${CACHE_VERSION}-${day}.json`)
+// 프롬프트나 결과 형식을 바꾸면 이 숫자를 올린다. 예전 형식의 기록을 오늘 브리핑으로 다시 쓰지 않게 된다.
+export const CACHE_VERSION = 4
 
+// 그날 확정된 브리핑은 날짜별 기록으로 남긴다. 보물상자와 재판이 이 기록을 쓴다.
 async function readSettled(day) {
-  for (const dir of CACHE_DIRS) {
-    try {
-      return JSON.parse(await readFile(cacheFile(dir, day), 'utf8'))
-    } catch { /* 없으면 다음 위치 */ }
+  try {
+    const record = await getRecord(day)
+    return record?.origin === 'live' && record.version === CACHE_VERSION ? { briefing: record.briefing, reason: null } : null
+  } catch {
+    return null
   }
-  return null
 }
 
 async function writeSettled(day, data) {
-  for (const dir of CACHE_DIRS) {
-    try {
-      await mkdir(dir, { recursive: true })
-      await writeFile(cacheFile(dir, day), JSON.stringify(data))
-      return
-    } catch { /* 못 쓰면 다음 위치 */ }
-  }
+  try {
+    const previous = await getRecord(day)
+    await putRecord({
+      day,
+      version: CACHE_VERSION,
+      origin: 'live',
+      changeRate: data.briefing.changeRate,
+      marketState: data.briefing.marketState,
+      briefing: data.briefing,
+      trial: previous?.trial ?? null,
+    })
+  } catch { /* 기록을 못 남겨도 오늘 화면은 그대로 보여준다 */ }
 }
 
 // 캐시를 거치지 않고 지금 기사로 새로 만든다. 만들 수 없으면 briefing: null과 이유를 돌려준다.
