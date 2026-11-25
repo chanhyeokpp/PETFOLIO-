@@ -692,24 +692,40 @@ body:has(.full-scene) { overflow-x: clip; }
 .result-hero.compact .hero-text small, .result-hero.compact .hero-note { grid-column: 1 / -1; }
 .result-hero.compact .hero-word { font-size: 15px; }
 
-/* ---------- 구름 속으로: 뉴스 → 섬 ---------- */
-.cloud-dive { position: fixed; z-index: 200; inset: 0; overflow: hidden; pointer-events: none; }
-.cloud-dive::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, #ffffff 0%, #eef8fb 55%, #d7eef2 100%); animation: dive-veil 2.1s ease-in-out both; }
-@keyframes dive-veil { 0% { opacity: 0; } 28% { opacity: 1; } 55% { opacity: 1; } 100% { opacity: 0; } }
+/* ---------- 구름 속으로: 뉴스 → 섬 ----------
+   모양 있는 구름 대신 뿌연 안개: 뒤 화면이 점점 흐려지고, 가장자리부터 하얗게 차오르고,
+   경계 없는 안개 덩어리들이 얼굴 앞을 지나간다. */
+.cloud-dive { position: fixed; z-index: 200; inset: 0; overflow: hidden; pointer-events: none; animation: dive-blur 2.1s ease-in-out both; }
+@keyframes dive-blur {
+  0% { backdrop-filter: blur(0); -webkit-backdrop-filter: blur(0); }
+  30% { backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+  60% { backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+  100% { backdrop-filter: blur(0); -webkit-backdrop-filter: blur(0); }
+}
+/* 가장자리부터 차오르는 흰 안개 */
+.cloud-dive::before {
+  content: ''; position: absolute; inset: -20%;
+  background: radial-gradient(closest-side, rgba(244, 250, 251, .55) 0%, rgba(248, 252, 252, .92) 55%, #fbfdfd 100%);
+  animation: dive-veil 2.1s ease-in-out both;
+}
+@keyframes dive-veil {
+  0% { opacity: 0; transform: scale(1.35); }
+  32% { opacity: 1; transform: scale(1); }
+  58% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(.9); }
+}
+/* 경계 없는 안개 덩어리: 다가오면서 커지고 흐려진다 */
 .puff {
-  position: absolute; top: 50%; left: 50%; width: 46vmax; height: 26vmax;
-  background:
-    radial-gradient(circle at 28% 62%, #fff 0 27%, transparent 28%),
-    radial-gradient(circle at 50% 42%, #fff 0 33%, transparent 34%),
-    radial-gradient(circle at 72% 60%, #fff 0 26%, transparent 27%),
-    radial-gradient(ellipse at 50% 72%, #fff 0 40%, transparent 41%);
-  filter: blur(6px) drop-shadow(0 10px 24px rgba(120, 170, 190, .25));
-  animation: puff-fly 1.9s cubic-bezier(.45, 0, .2, 1) both;
+  position: absolute; top: 50%; left: 50%; width: 90vmax; height: 60vmax;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, .9) 0%, rgba(255, 255, 255, .55) 45%, rgba(255, 255, 255, 0) 100%);
+  border-radius: 50%;
+  filter: blur(28px);
+  animation: puff-fly 2s cubic-bezier(.45, 0, .2, 1) both;
   animation-delay: var(--d);
 }
 @keyframes puff-fly {
-  0% { opacity: 0; transform: translate(-50%, -50%) translate(var(--x0), var(--y0)) scale(.3); }
-  25% { opacity: 1; }
-  70% { opacity: .95; }
-  100% { opacity: 0; transform: translate(-50%, -50%) translate(var(--x1), var(--y1)) scale(3.4); }
+  0% { opacity: 0; transform: translate(-50%, -50%) translate(var(--x0), var(--y0)) scale(.4); }
+  30% { opacity: .9; }
+  70% { opacity: .7; }
+  100% { opacity: 0; transform: translate(-50%, -50%) translate(var(--x1), var(--y1)) scale(2.8); }
 }
