@@ -19,29 +19,32 @@ function Letter({ letter, open, onToggle }) {
           <small>{formatDate(letter.kstDate)}</small>
         </span>
       </button>
-      {open && (
-        <div className="letter-body">
-          {/* 제목이 무엇인지 풀어 주는 말풍선: 꼬리가 캡슐을 가리킨다 */}
-          <p className="letter-watch">{letter.watch}</p>
-          {letter.expectation && (
-            <p className="letter-expect">
-              <b>이번엔</b>
-              <span>{letter.expectation.text}{letter.expectation.figure && <em>{letter.expectation.figure}</em>}</span>
-              {source?.link && (
-                <a href={source.link} target="_blank" rel="noopener noreferrer" title={source.source}>기사 ↗</a>
-              )}
-            </p>
-          )}
-          <div className="letter-branches">
-            {letter.branches.map((branch, index) => (
-              <div key={branch.when} className={index === 0 ? 'low' : 'high'}>
-                <b><i aria-hidden="true">{index === 0 ? '▼' : '▲'}</i>{branch.when}</b>
-                <p>{branch.then}</p>
-              </div>
-            ))}
+      {/* 늘 그려 두고 높이만 접었다 폈다: 바뀔 때 부드럽게 */}
+      <div className="letter-fold" inert={!open} aria-hidden={!open}>
+        <div className="letter-clip">
+          <div className="letter-body">
+            {/* 제목이 무엇인지 풀어 주는 말풍선: 꼬리가 캡슐을 가리킨다 */}
+            <p className="letter-watch">{letter.watch}</p>
+            {letter.expectation && (
+              <p className="letter-expect">
+                <b>이번엔</b>
+                <span>{letter.expectation.text}{letter.expectation.figure && <em>{letter.expectation.figure}</em>}</span>
+                {source?.link && (
+                  <a href={source.link} target="_blank" rel="noopener noreferrer" title={source.source}>기사 ↗</a>
+                )}
+              </p>
+            )}
+            <div className="letter-branches">
+              {letter.branches.map((branch, index) => (
+                <div key={branch.when} className={index === 0 ? 'low' : 'high'}>
+                  <b><i aria-hidden="true">{index === 0 ? '▼' : '▲'}</i>{branch.when}</b>
+                  <p>{branch.then}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      )}
+      </div>
     </li>
   )
 }

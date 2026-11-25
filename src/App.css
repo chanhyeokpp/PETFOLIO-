@@ -840,3 +840,15 @@ body:has(.full-scene) { overflow-x: clip; }
 .letter-body { padding-top: 2px; }
 .letter-body .letter-watch { position: relative; margin-top: 8px; padding: 11px 13px; color: #24474c; background: #eef8f7; border-radius: 14px; font-size: 14px; font-weight: 700; line-height: 1.5; }
 .letter-body .letter-watch::before { content: ''; position: absolute; top: -8px; left: 26px; border-left: 8px solid transparent; border-right: 8px solid transparent; border-bottom: 9px solid #eef8f7; }
+
+/* 병편지 펼치기·접기: 높이가 부드럽게, 안의 내용은 살짝 떠오르며 */
+.letter-fold { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows .42s cubic-bezier(.22, .8, .26, 1), opacity .3s ease; }
+.letter.open .letter-fold { grid-template-rows: 1fr; opacity: 1; }
+.letter-clip { min-height: 0; overflow: hidden; }
+.letter-fold .letter-body { transform: translateY(-6px); transition: transform .42s cubic-bezier(.22, .8, .26, 1); }
+.letter.open .letter-fold .letter-body { transform: none; }
+.letter { transition: border-color .3s ease, box-shadow .3s ease; }
+.letter-head .letter-capsule { transition: background-color .3s ease, color .3s ease, border-color .3s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .letter-fold, .letter-fold .letter-body, .letter, .letter-head .letter-capsule { transition: none; }
+}
