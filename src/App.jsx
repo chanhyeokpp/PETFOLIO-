@@ -493,7 +493,7 @@ function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${screen === 'scene' && SCENE_MODE === 'island' ? 'full-scene' : ''}`}>
       <header className="topbar">
         <a className="brand" href="#top" aria-label="petfolio 홈">
           petfolio<span>!</span>
@@ -528,7 +528,7 @@ function App() {
       {screen === 'scene' && (
       <>
       <main id="top" className={`dashboard screen ${SCENE_MODE}-layout`}>
-        <section className="intro">
+        <section className="intro" id="scene-details">
           <p className="eyebrow">오늘 주식시장은 어떤 기분일까?</p>
           <h1>숫자보다 먼저,<br />오늘 시장의 분위기를 만나요.</h1>
           <p className="description">
@@ -642,6 +642,9 @@ function App() {
             )}
           </Suspense>
           <span className="touch-hint">{SCENE_MODE === 'island' ? '섬을 끌어서 돌려보고, 눌러보세요!' : '포리와 주변을 눌러보세요!'}</span>
+          {SCENE_MODE === 'island' && (
+            <a className="scroll-hint" href="#scene-details">오늘의 숫자 보기 <span aria-hidden="true">↓</span></a>
+          )}
           {SCENE_MODE === 'sea' && (
           <button
             type="button"

@@ -507,3 +507,35 @@ h1,.screen-title,.culprit-card strong,.news-body > strong,.news-body a { word-br
 @media (max-width: 760px) {
   .arrival-card { top: auto; bottom: 12px; left: 12px; right: 12px; width: auto; }
 }
+
+/* ---------- 섬 전체 화면: 섬이 창을 꽉 채우고, 숫자 카드와 상태 테스트는 그 아래로 ---------- */
+body:has(.full-scene) { overflow-x: clip; }
+.app-shell.full-scene { padding-top: 0; }
+.full-scene .topbar { position: absolute; z-index: 20; top: 0; left: 0; right: 0; padding: 16px 24px; pointer-events: none; }
+.full-scene .topbar > * { pointer-events: auto; }
+.full-scene .brand { padding: 4px 12px; background: rgba(255,255,255,.72); border-radius: 14px; backdrop-filter: blur(8px); }
+.full-scene .island-layout { gap: 28px; }
+.full-scene .island-layout .pori-stage {
+  width: 100vw; margin-left: calc(50% - 50vw);
+  height: 100vh; height: 100dvh; min-height: 420px;
+  border-radius: 0; box-shadow: none;
+}
+.full-scene .pori-stage.island .touch-hint { top: 76px; left: 24px; }
+.full-scene .shell-chest { top: 76px; right: 24px; }
+.full-scene .pori-stage.island .arrival-card { top: 116px; left: 24px; }
+.scroll-hint { position: absolute; z-index: 4; left: 50%; bottom: 18px; transform: translateX(-50%); padding: 8px 14px; color: #2b5d57; background: rgba(255,255,255,.8); border-radius: 999px; font-size: 12.5px; font-weight: 800; text-decoration: none; backdrop-filter: blur(8px); animation: scroll-nudge 2.4s ease-in-out infinite; }
+.scroll-hint:hover { background: #fff; }
+@keyframes scroll-nudge { 0%, 100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, 4px); } }
+@media (prefers-reduced-motion: reduce) { .scroll-hint { animation: none; } }
+@media (min-width: 521px) {
+  .full-scene .pori-stage.island .speech { top: 116px; left: 24px; }
+  .full-scene .pori-stage.island .scene-info { left: 24px; bottom: 24px; }
+}
+@media (max-width: 520px) {
+  .full-scene .topbar { padding: 12px 14px; }
+  .full-scene .pori-stage.island .touch-hint { top: 64px; left: 14px; }
+  .full-scene .pori-stage.island .speech { bottom: 60px; }
+  .full-scene .pori-stage.island .scene-info, .full-scene .shell-chest { bottom: 60px; }
+  .full-scene .shell-chest { top: auto; }
+  .full-scene .pori-stage.island .arrival-card { top: auto; bottom: 60px; left: 12px; }
+}
