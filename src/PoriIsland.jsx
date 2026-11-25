@@ -100,7 +100,7 @@ const PROPS = [
 ]
 
 const HOTSPOTS = [
-  { key: 'pori', label: '포리 쓰다듬기', size: 72 },
+  { key: 'pori', label: '포리 쓰다듬기 (끌어서 옮기기)', size: 72 },
   { key: 'lighthouse', label: '등대: 외해(간밤 미국 증시)와 바람 보기', size: 84 },
   { key: 'home', label: '포리 집 보기', size: 84 },
   { key: 'chest', label: '보물상자: 모은 조개 보기', size: 70 },
@@ -136,6 +136,17 @@ function outline(radius, wobble, seed, cx = 0, cz = 0, count = 14) {
 
 // shape coordinates are (x, -z) so that after rotating the extrusion upright, z lands where we want it
 const toShape = (points, scale = 1) => new THREE.Shape(points.map((p) => new THREE.Vector2(p.x * scale, -p.y * scale)))
+
+// is (x, z) inside a closed outline of Vector2(x, z) points
+function insidePolygon(points, x, z) {
+  let inside = false
+  for (let i = 0, j = points.length - 1; i < points.length; j = i, i += 1) {
+    const a = points[i]
+    const b = points[j]
+    if ((a.y > z) !== (b.y > z) && x < ((b.x - a.x) * (z - a.y)) / (b.y - a.y) + a.x) inside = !inside
+  }
+  return inside
+}
 
 // One rounded terrace: flat top (top material) with rocky sides (side material).
 function terrace(points, top, height, topMaterial, sideMaterial) {
@@ -610,17 +621,21 @@ export default function PoriIsland({
   letters = null,
   // arrive from the sky: the camera starts high above (in the clouds) and circles down onto the island
   descendOnMount = false,
+  // free to stroll: after visiting today's spot, Pori wanders the grass (never into the water)
+  wander = false,
 }) {
   const hostRef = useRef(null)
   const hotspotRefs = useRef({})
   const dataRef = useRef(null)
   const touchRef = useRef({ signal: touchSignal, at: -10 })
   const descendRef = useRef(descendOnMount)
+  // drag-to-lift handlers live inside the scene effect; the Pori button calls them through this
+  const liftApi = useRef(null)
 
   useEffect(() => {
     dataRef.current = {
       marketState, waterLevel, volatility, foreign: foreignFlow, institution: institutionFlow,
-      overnight, wind, samsung, hynix, fish, focus, selected, chestNew, fishing, onFishingCaught, foggy, letters,
+      overnight, wind, samsung, hynix, fish, focus, selected, chestNew, fishing, onFishingCaught, foggy, letters, wander,
     }
   })
 
@@ -682,6 +697,24 @@ export default function PoriIsland({
       terrace(grassOutline, GROUND_Y, 1.2, grass, rock),
       terrace(hillOutline, 1.05, 1.0, hillGrass, rock),
     )
+    // --- where Pori may stand: on the grass, off the hill, clear of the house, chest, trees and bushes ---
+    const HILL_CENTER = { x: -1.55, z: -1.35 }
+    const OBSTACLES = [
+      { x: 1.45, z: -1.35, r: 0.8 },
+      { x: CHEST_SPOT.x, z: CHEST_SPOT.z, r: 0.42 },
+      ...PROPS.filter((prop) => prop.y === undefined && prop.model.startsWith('tree')).map((prop) => ({ x: prop.x, z: prop.z, r: 0.4 })),
+      ...PROPS.filter((prop) => prop.model === 'plant-bush').map((prop) => ({ x: prop.x, z: prop.z, r: 0.28 })),
+    ]
+    const onGrass = (x, z) => insidePolygon(grassOutline, x * 1.14, z * 1.14)
+      && !insidePolygon(hillOutline, HILL_CENTER.x + (x - HILL_CENTER.x) / 1.22, HILL_CENTER.z + (z - HILL_CENTER.z) / 1.22)
+    const standable = (x, z) => onGrass(x, z) && OBSTACLES.every((item) => Math.hypot(x - item.x, z - item.z) > item.r)
+    const pathClear = (x0, z0, x1, z1) => {
+      for (let i = 1; i <= 10; i += 1) {
+        const t = i / 10
+        if (!standable(x0 + (x1 - x0) * t, z0 + (z1 - z0) * t)) return false
+      }
+      return true
+    }
     const pathMaterial = standard(PALETTE.path)
     scene.add(
       pathRibbon([[SPOTS.lighthouse.x, SPOTS.lighthouse.z], [0.2, 0.7], [1.4, 0.85], [SPOTS.dock.x + 0.2, SPOTS.dock.z]], 0.3, pathMaterial),
@@ -891,6 +924,32 @@ export default function PoriIsland({
 
     const startSpot = SPOTS[data().focus] ?? SPOTS.shore
     const walker = { x: startSpot.x, z: startSpot.z, heading: startSpot.face, phase: 0 }
+    // wandering: first stay at today's spot a while, then stroll to random places on the front of the island
+    const strolling = { target: null, idleUntil: 7, arrivedAtSpot: false }
+    const pickStroll = () => {
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        const x = -2.7 + Math.random() * 5.5
+        const z = -0.8 + Math.random() * 3.4
+        const far = Math.hypot(x - walker.x, z - walker.z)
+        if (far < 0.7 || far > 2.6) continue
+        if (standable(x, z) && pathClear(walker.x, walker.z, x, z)) return { x, z }
+      }
+      return null
+    }
+    // where Pori would land while held: a soft ring on the ground (red over water)
+    const landRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.2, 0.27, 32),
+      new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }),
+    )
+    landRing.rotation.x = -Math.PI / 2
+    landRing.renderOrder = 2
+    scene.add(landRing)
+    // lifting Pori by dragging: held in the air, set down on land, refused over water
+    const lift = {
+      pointerId: null, sx: 0, sy: 0, moved: false, active: false, liftedAt: 0,
+      x: 0, z: 0, valid: true, lastValid: { x: 0, z: 0 }, height: 0,
+      drop: null, landedAt: -10, refusedAt: -10, suppressClick: false,
+    }
 
     // --- boats: berths on either side of the dock; sellers sail out into the fog ---
     const boats = [
@@ -1076,6 +1135,64 @@ export default function PoriIsland({
       drag.id = null
       host.classList.remove('dragging')
     }
+    // --- lifting Pori: press on Pori and drag. A tap without moving stays a tap (pet). ---
+    const raycaster = new THREE.Raycaster()
+    const pointerNdc = new THREE.Vector2()
+    const holdPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -GROUND_Y)
+    const holdPoint = new THREE.Vector3()
+    const groundUnder = (event) => {
+      const rect = host.getBoundingClientRect()
+      pointerNdc.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1)
+      raycaster.setFromCamera(pointerNdc, camera)
+      return raycaster.ray.intersectPlane(holdPlane, holdPoint)
+    }
+    const liftDown = (event) => {
+      if (lift.drop || data().fishing) return
+      lift.pointerId = event.pointerId
+      lift.sx = event.clientX
+      lift.sy = event.clientY
+      lift.moved = false
+      try { event.currentTarget.setPointerCapture(event.pointerId) } catch { /* keeps working without capture */ }
+    }
+    const liftMove = (event) => {
+      if (lift.pointerId !== event.pointerId) return
+      if (!lift.moved && Math.hypot(event.clientX - lift.sx, event.clientY - lift.sy) > 6) {
+        lift.moved = true
+        lift.active = true
+        lift.liftedAt = performance.now() / 1000
+        lift.lastValid = { x: walker.x, z: walker.z }
+        host.classList.add('holding')
+      }
+      if (!lift.active) return
+      const point = groundUnder(event)
+      if (!point) return
+      // can't carry Pori off into the distance
+      const reach = Math.hypot(point.x, point.z)
+      const scale = reach > 5 ? 5 / reach : 1
+      lift.x = point.x * scale
+      lift.z = point.z * scale
+      lift.valid = standable(lift.x, lift.z)
+      if (lift.valid) lift.lastValid = { x: lift.x, z: lift.z }
+    }
+    const liftUp = (event) => {
+      if (lift.pointerId !== event.pointerId) return
+      lift.pointerId = null
+      host.classList.remove('holding')
+      if (!lift.active) return
+      lift.active = false
+      lift.suppressClick = true
+      window.setTimeout(() => { lift.suppressClick = false }, 0)
+      const now = performance.now() / 1000
+      const refused = !lift.valid
+      const to = refused ? lift.lastValid : { x: lift.x, z: lift.z }
+      lift.drop = {
+        start: now, duration: refused ? 0.7 : 0.32, refused,
+        fromX: walker.x, fromZ: walker.z, toX: to.x, toZ: to.z, fromHeight: lift.height,
+      }
+      if (refused) lift.refusedAt = now + 0.7
+    }
+    liftApi.current = { down: liftDown, move: liftMove, up: liftUp, clickAllowed: () => !lift.suppressClick }
+
     host.addEventListener('pointerdown', onPointerDown)
     host.addEventListener('pointermove', onPointerMove)
     host.addEventListener('pointerup', onPointerUp)
@@ -1140,21 +1257,78 @@ export default function PoriIsland({
       const windStrength = Math.abs(windLevel)
       const windDirection = windLevel > 0 ? -1 : 1
 
-      // --- Pori walks to today's spot ---
-      const spot = SPOTS[input.focus] ?? SPOTS.shore
+      // --- Pori walks to today's spot, then (when free) strolls around; or is held / being set down ---
+      const held = lift.active || lift.drop !== null
+      let spot = SPOTS[input.focus] ?? SPOTS.shore
+      if (input.wander && motion && !held) {
+        if (!strolling.arrivedAtSpot) {
+          if (Math.hypot(spot.x - walker.x, spot.z - walker.z) < 0.05) {
+            strolling.arrivedAtSpot = true
+            strolling.idleUntil = now + 6
+          }
+        } else {
+          if (!strolling.target && now > strolling.idleUntil) strolling.target = pickStroll()
+          // standing still: face the viewer a little so the face shows
+          spot = strolling.target
+            ? { x: strolling.target.x, z: strolling.target.z, face: walker.heading }
+            : { x: walker.x, z: walker.z, face: view.yaw * 0.6 + Math.sin(now * 0.3) * 0.5 }
+        }
+      } else if (!input.wander) {
+        // sent somewhere (fishing, chest, letters): go there, then wander again from that spot
+        strolling.arrivedAtSpot = false
+        strolling.target = null
+      }
       const dx = spot.x - walker.x
       const dz = spot.z - walker.z
       const distance = Math.hypot(dx, dz)
-      const moving = distance > 0.03 && motion > 0
-      if (!motion) {
+      const moving = !held && distance > 0.03 && motion > 0
+      if (held) {
+        // position is set by the hand (below)
+      } else if (!motion) {
         walker.x = spot.x
         walker.z = spot.z
       } else if (moving) {
-        const step = Math.min(distance, WALK_SPEED * dt)
+        const step = Math.min(distance, WALK_SPEED * (strolling.target ? 0.55 : 1) * dt)
         walker.x += (dx / distance) * step
         walker.z += (dz / distance) * step
+      } else if (strolling.target) {
+        strolling.target = null
+        strolling.idleUntil = now + 2.5 + Math.random() * 4.5
       }
-      walker.heading = dampAngle(walker.heading, moving ? Math.atan2(dx, dz) : spot.face, moving ? 9 : 4, dt)
+      if (!held) walker.heading = dampAngle(walker.heading, moving ? Math.atan2(dx, dz) : spot.face, moving ? 9 : 4, dt)
+
+      // held in the hand: follow the pointer in the air, turned toward the viewer
+      if (lift.active) {
+        walker.x = damp(walker.x, lift.x, 14, dt)
+        walker.z = damp(walker.z, lift.z, 14, dt)
+        walker.heading = dampAngle(walker.heading, view.yaw, 6, dt)
+        lift.height = damp(lift.height, 1, 12, dt)
+      } else if (lift.drop) {
+        // set down (or, over water, flown back to land in an arc)
+        const t = Math.min(1, (now - lift.drop.start) / lift.drop.duration)
+        const e = easeInOut(t)
+        walker.x = THREE.MathUtils.lerp(lift.drop.fromX, lift.drop.toX, e)
+        walker.z = THREE.MathUtils.lerp(lift.drop.fromZ, lift.drop.toZ, e)
+        lift.height = lift.drop.fromHeight * (1 - e) + Math.sin(t * Math.PI) * (lift.drop.refused ? 0.6 : 0.1)
+        if (t >= 1) {
+          lift.drop = null
+          lift.height = 0
+          lift.landedAt = now
+          strolling.target = null
+          strolling.idleUntil = now + 3
+        }
+      } else {
+        lift.height = 0
+      }
+      landRing.material.opacity = damp(landRing.material.opacity, lift.active ? 0.75 : 0, 10, dt)
+      landRing.visible = landRing.material.opacity > 0.02
+      if (landRing.visible) {
+        const over = lift.active ? { x: lift.x, z: lift.z } : { x: walker.x, z: walker.z }
+        const overLand = lift.active ? lift.valid : true
+        landRing.position.set(over.x, (overLand ? GROUND_Y : seaLevel) + 0.02, over.z)
+        landRing.material.color.set(overLand ? '#ffffff' : '#ff6b6b')
+        landRing.scale.setScalar(1 + Math.sin(now * 6) * 0.08 * motion)
+      }
       live.walk = damp(live.walk, moving ? 1 : 0, 10, dt)
       walker.phase += dt * 10 * live.walk
 
@@ -1281,13 +1455,17 @@ export default function PoriIsland({
       }
       live.jumpY = damp(live.jumpY, jumpY, 30, dt)
       live.stretch = damp(live.stretch, stretch, 26, dt)
-      live.armLift = damp(live.armLift, armLift, 14, dt)
+      // held: surprised first ("어?"), then delighted. Refused over water: shakes head with a frown.
+      const heldFor = lift.active ? now - lift.liftedAt : -1
+      const refusing = now < lift.refusedAt + 1.0 && now > lift.refusedAt - 0.7
+      live.armLift = damp(live.armLift, lift.active ? 1.3 + Math.sin(now * 9) * 0.15 * motion : armLift, 14, dt)
 
       const sinceTouch = now - touchRef.current.at
-      live.happy = damp(live.happy, (sinceTouch < 1.5 || fx.cheer) && state !== 'closed' ? 1 : 0, 14, dt)
-      live.focus = damp(live.focus, fx.focus, 8, dt)
-      live.surprise = damp(live.surprise, fx.surprise, 14, dt)
-      live.headYaw = damp(live.headYaw, fx.headYaw, 7, dt)
+      const happyTarget = lift.active ? (heldFor >= 0.55 ? 1 : 0) : (sinceTouch < 1.5 || fx.cheer) && state !== 'closed' ? 1 : 0
+      live.happy = damp(live.happy, happyTarget, lift.active ? 10 : 14, dt)
+      live.focus = damp(live.focus, refusing ? 1 : fx.focus, refusing ? 12 : 8, dt)
+      live.surprise = damp(live.surprise, lift.active ? (heldFor < 0.55 ? 1 : 0) : fx.surprise, 14, dt)
+      live.headYaw = damp(live.headYaw, fx.headYaw + (refusing ? Math.sin(now * 20) * 0.55 : 0), refusing ? 30 : 7, dt)
       const touchBounce = sinceTouch < 0.9 ? Math.sin(sinceTouch * 16) * Math.exp(-sinceTouch * 5) * 0.09 * motion : 0
       live.yaw = damp(live.yaw, state === 'loading' ? Math.sin(now * 1.6) * 0.4 * motion : 0, 5, dt)
 
@@ -1306,13 +1484,19 @@ export default function PoriIsland({
 
       const sy = live.stretch * (1 - pose.squash) * (1 + touchBounce)
       const sxz = 1 / Math.sqrt(sy)
+      // just set down: a little squash-and-bounce
+      const sinceLand = now - lift.landedAt
+      const landBounce = sinceLand < 0.6 ? Math.sin(sinceLand * 18) * Math.exp(-sinceLand * 7) * 0.16 * motion : 0
+      const liftY = lift.height * 0.85
+      // dangling in the hand: swings a little side to side
+      const dangle = lift.height * Math.sin(now * 4.2) * 0.14 * motion
       pori.root.position.set(
         walker.x,
-        GROUND_Y + (live.jumpY + fx.hop + Math.abs(stride) * 0.12 * live.walk) * PORI_SCALE,
+        GROUND_Y + liftY + (live.jumpY + fx.hop + Math.abs(stride) * 0.12 * live.walk) * PORI_SCALE,
         walker.z,
       )
-      pori.root.scale.set(sxz * PORI_SCALE, sy * PORI_SCALE, sxz * PORI_SCALE)
-      pori.root.rotation.set(fx.lean, walker.heading, stride * 0.07 * live.walk)
+      pori.root.scale.set(sxz * PORI_SCALE * (1 + landBounce * 0.5), sy * PORI_SCALE * (1 - landBounce), sxz * PORI_SCALE * (1 + landBounce * 0.5))
+      pori.root.rotation.set(fx.lean + lift.height * 0.08, walker.heading, stride * 0.07 * live.walk + dangle)
       pori.torso.scale.y = 1 + breathe * 0.014
       pori.torso.scale.x = 1 - breathe * 0.006
       pori.head.position.y = 1.5 - pose.headDrop + breathe * 0.012
@@ -1331,8 +1515,10 @@ export default function PoriIsland({
       })
       pori.feet.forEach((foot, index) => {
         const swing = Math.sin(walker.phase + index * Math.PI)
-        foot.position.y = 0.15 + Math.max(0, swing) * 0.16 * live.walk
-        foot.position.z = 0.14 + swing * 0.14 * live.walk
+        // held: little legs kick in the air
+        const kick = lift.height * Math.sin(now * 11 + index * Math.PI) * 0.1 * motion
+        foot.position.y = 0.15 + Math.max(0, swing) * 0.16 * live.walk - lift.height * 0.06 + kick
+        foot.position.z = 0.14 + swing * 0.14 * live.walk + kick * 0.6
       })
       pori.tail.rotation.z = -1.05 - pose.tail * 0.5 - live.armLift * 0.25 + Math.sin(now * 2.4) * 0.09 * motion + fx.tail * 0.4 * motion
       pori.tail.rotation.y = Math.sin(now * 1.2 + walker.phase) * 0.15 * motion
@@ -1658,7 +1844,7 @@ export default function PoriIsland({
       placeCamera()
 
       // --- tap targets follow their objects ---
-      placeHotspot('pori', walker.x, GROUND_Y + 0.45, walker.z, true)
+      placeHotspot('pori', walker.x, GROUND_Y + 0.45 + lift.height * 0.85, walker.z, true)
       placeHotspot('lighthouse', -1.6, 1.85, -1.4, true)
       placeHotspot('home', 1.45, GROUND_Y + 0.5, -1.35, true)
       placeHotspot('chest', CHEST_SPOT.x, GROUND_Y + 0.2, CHEST_SPOT.z, true)
@@ -1711,7 +1897,13 @@ export default function PoriIsland({
               style={{ width: size, height: size, display: 'none' }}
               aria-label={label}
               title={action ? label : undefined}
-              onClick={() => onPick(name)}
+              onClick={() => { if (liftApi.current?.clickAllowed?.() !== false) onPick(name) }}
+              {...(name === 'pori' ? {
+                onPointerDown: (event) => liftApi.current?.down(event),
+                onPointerMove: (event) => liftApi.current?.move(event),
+                onPointerUp: (event) => liftApi.current?.up(event),
+                onPointerCancel: (event) => liftApi.current?.up(event),
+              } : {})}
             >
               {action && <span aria-hidden="true">{action}</span>}
             </button>

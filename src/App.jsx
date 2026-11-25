@@ -29,13 +29,14 @@ const ISLAND_PREVIEW = URL_PARAMS.get('island') === 'new'
 
 // 오늘 이야기의 분류 → 포리가 가 있는 곳
 const PLACE_BY_TAG = { flow: 'dock', us: 'lighthouse', fx: 'lighthouse', leader: 'shore', stock: 'shore' }
+// 오늘 이야기가 있는 곳 (포리는 들렀다가 섬을 돌아다닌다)
 const PLACE_LINES = {
-  dock: '선착장에서 오가는 배를 보고 있어요',
-  lighthouse: '등대에서 외해를 바라보고 있어요',
-  shore: '물가에서 고래와 물고기를 보고 있어요',
-  home: '집에서 쉬고 있어요',
-  chest: '보물상자를 열어 보여주고 있어요',
-  fishing: '선착장 끝에서 낚시를 하고 있어요',
+  dock: '선착장의 배',
+  lighthouse: '등대 너머 외해와 바람',
+  shore: '물가의 고래와 물고기',
+  home: '포리 집',
+  chest: '보물상자',
+  fishing: '선착장 끝 낚시터',
 }
 
 const PORI_REACTIONS = {
@@ -673,6 +674,7 @@ function App() {
                 onFishingCaught={() => hookFish()}
                 foggy={isFoggy}
                 descendOnMount={arriveFromSky}
+                wander={!fishing && picked !== 'chest' && picked !== 'bottles' && ['rise', 'flat', 'fall'].includes(marketState)}
                 letters={!isOpen('bottles') ? null : letters?.upcoming?.filter((letter) => letter.dday <= 10).slice(0, 3).map((letter) => ({ dday: letter.dday })) ?? null}
               />
             ) : (
@@ -778,7 +780,7 @@ function App() {
             <div className={`speech ${reaction ? 'reacting' : ''}`} aria-live="polite">
               <strong>{fishing ? '포리가 낚싯대를 드리웠어요' : reaction?.title ?? scenario.title}</strong>
               <span>{fishing ? '무엇이 걸릴까요? 오늘 바다에서 화제였던 녀석일 거예요.' : reaction?.message ?? scenario.message}</span>
-              {SCENE_MODE === 'island' && !reaction && !fishing && <small className="speech-place">포리는 지금 {PLACE_LINES[focus]}</small>}
+              {SCENE_MODE === 'island' && !reaction && !fishing && <small className="speech-place">오늘 볼 곳: {PLACE_LINES[focus]}</small>}
             </div>
           )}
         </section>

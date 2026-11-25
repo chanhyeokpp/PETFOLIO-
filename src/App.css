@@ -729,3 +729,7 @@ body:has(.full-scene) { overflow-x: clip; }
   70% { opacity: .7; }
   100% { opacity: 0; transform: translate(-50%, -50%) translate(var(--x1), var(--y1)) scale(2.8); }
 }
+
+/* 포리 들어서 옮기기 */
+.scene-hotspot[aria-label^="포리 쓰다듬기"] { cursor: grab; touch-action: none; }
+.scene-hotspot[aria-label^="포리 쓰다듬기"]:active { cursor: grabbing; }
