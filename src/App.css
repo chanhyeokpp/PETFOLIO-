@@ -378,7 +378,7 @@ h1,.screen-title,.culprit-card strong,.news-body > strong,.news-body a { word-br
 .case-block { display: grid; gap: 7px; padding-top: 10px; border-top: 1px dashed rgba(32,33,38,.1); }
 .case-label { color: #7b8086; font-size: 12px; font-weight: 850; letter-spacing: .03em; }
 .footprints, .suspects { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.footprints li, .suspects li { display: grid; grid-template-columns: 24px 1fr auto; align-items: center; gap: 8px; padding: 8px 12px; color: #3c4248; background: rgba(255,255,255,.85); border: 1px solid rgba(32,33,38,.06); border-radius: 12px; font-size: 14px; font-weight: 700; }
+.footprints li, .suspects li { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; padding: 8px 12px; color: #3c4248; background: rgba(255,255,255,.85); border: 1px solid rgba(32,33,38,.06); border-radius: 12px; font-size: 14px; font-weight: 700; }
 .footprints li b { font-size: 12px; font-weight: 850; }
 .footprints li.agrees b { color: #1f7f68; }
 .footprints li.against b { color: #c26a3a; }
@@ -539,3 +539,10 @@ body:has(.full-scene) { overflow-x: clip; }
   .full-scene .shell-chest { top: auto; }
   .full-scene .pori-stage.island .arrival-card { top: auto; bottom: 60px; left: 12px; }
 }
+
+/* 범인 맞히기: 결과 한 줄 + 문장 보기 세 개 (아이콘 없이) */
+.guess-list { display: grid; gap: 9px; margin-top: 6px; }
+.guess-list .guess-choice { display: block; width: 100%; padding: 15px 18px; color: #2b2f36; background: #fff; border: 1.5px solid #e9e2d2; border-radius: 16px; font: inherit; font-size: 16px; font-weight: 750; text-align: left; word-break: keep-all; cursor: pointer; transition: border-color .15s, transform .15s, box-shadow .15s; }
+.guess-list .guess-choice:hover, .guess-list .guess-choice:focus-visible { transform: translateY(-1px); border-color: #2b2f36; box-shadow: 0 8px 20px rgba(32,33,38,.08); }
+.guess-card.fall { background: linear-gradient(160deg,#eef4ff,#fff); border-color: #d5e3f8; }
+.guess-card.rise { background: linear-gradient(160deg,#fff1ee,#fff); border-color: #f6d6ce; }

@@ -47,10 +47,10 @@ export const DEMO_NEWS = {
     },
     suspects: [{ title: '원/달러 환율 안정', tag: 'fx' }],
     footprints: [
-      { tag: 'us', text: '간밤 미국 반도체 +2.80%', agrees: true, notable: true },
-      { tag: 'fx', text: '원/달러 환율 -0.30%', agrees: true, notable: false },
-      { tag: 'flow', text: '외국인 4,200억원 순매수', agrees: true, notable: true },
-      { tag: 'leader', text: 'SK하이닉스 +3.10%', agrees: true, notable: true },
+      { tag: 'us', text: '간밤 미국 반도체 +2.80%', statement: '간밤 미국 반도체가 크게 올라서', agrees: true, notable: true },
+      { tag: 'fx', text: '원/달러 환율 -0.30%', statement: '환율이 내려 원화가 강해져서', agrees: true, notable: false },
+      { tag: 'flow', text: '외국인 4,200억원 순매수', statement: '외국인이 4,200억원어치를 사서', agrees: true, notable: true },
+      { tag: 'leader', text: 'SK하이닉스 +3.10%', statement: 'SK하이닉스가 크게 올라서', agrees: true, notable: true },
     ],
     items: [
       { id: 'rise-1', tag: 'us', sentiment: 'good', title: '미국 반도체주가 일제히 올랐어요', summary: '인공지능 투자 기대가 다시 커지며 간밤 미국 기술주가 강하게 올랐어요.' },
@@ -69,10 +69,10 @@ export const DEMO_NEWS = {
     },
     suspects: [{ title: '달러 강세', tag: 'fx' }, { title: '외국인 차익 실현', tag: 'flow' }],
     footprints: [
-      { tag: 'us', text: '간밤 미국 반도체 -3.40%', agrees: true, notable: true },
-      { tag: 'fx', text: '원/달러 환율 +0.90%', agrees: true, notable: true },
-      { tag: 'flow', text: '외국인 6,800억원 순매도', agrees: true, notable: true },
-      { tag: 'leader', text: '삼성전자 -2.60%', agrees: true, notable: true },
+      { tag: 'us', text: '간밤 미국 반도체 -3.40%', statement: '간밤 미국 반도체가 크게 내려서', agrees: true, notable: true },
+      { tag: 'fx', text: '원/달러 환율 +0.90%', statement: '환율이 올라 원화가 약해져서', agrees: true, notable: true },
+      { tag: 'flow', text: '외국인 6,800억원 순매도', statement: '외국인이 6,800억원어치를 팔아서', agrees: true, notable: true },
+      { tag: 'leader', text: '삼성전자 -2.60%', statement: '삼성전자가 내려서', agrees: true, notable: true },
     ],
     items: [
       { id: 'fall-1', tag: 'us', sentiment: 'bad', title: '미국 반도체주가 크게 빠졌어요', summary: '대형 반도체 기업의 실적 전망이 기대에 못 미치며 간밤 기술주가 급락했어요.' },

@@ -166,6 +166,14 @@ export function checkCulprit(tag, kospi) {
   return null
 }
 
+// 받침 있으면 이, 없으면 가
+const subject = (word) => {
+  const code = word.charCodeAt(word.length - 1) - 0xac00
+  if (code < 0 || code > 11171) return `${word}이(가)`
+  return `${word}${code % 28 ? '이' : '가'}`
+}
+const moved = (value, big) => `${Math.abs(value) >= big ? '크게 ' : ''}${value > 0 ? '올라서' : '내려서'}`
+
 // 숫자 발자국: 섬의 각 장소가 오늘 어느 쪽을 가리켰는지. 범인과 상관없이 늘 같은 기준으로 계산한다.
 // agrees: 코스피와 같은 쪽으로 밀었는지(true/false), notable: 평소보다 눈에 띄게 움직였는지.
 export function buildFootprints(kospi) {
@@ -177,6 +185,7 @@ export function buildFootprints(kospi) {
     const strongest = us.reduce((a, b) => (Math.abs(b.changePercent) > Math.abs(a.changePercent) ? b : a))
     prints.push({
       tag: 'us', text: `간밤 ${strongest.label} ${signed(strongest.changePercent)}`,
+      statement: `간밤 ${subject(strongest.label)} ${moved(strongest.changePercent, 2)}`,
       agrees: Math.sign(strongest.changePercent) === direction, notable: strongest.unusual >= 1,
     })
   }
@@ -185,6 +194,7 @@ export function buildFootprints(kospi) {
     // 환율이 오르면(원화 약세) 보통 코스피에는 부담
     prints.push({
       tag: 'fx', text: `원/달러 환율 ${signed(fx.changePercent)}`,
+      statement: fx.changePercent > 0 ? '환율이 올라 원화가 약해져서' : '환율이 내려 원화가 강해져서',
       agrees: Math.sign(fx.changePercent) === -direction, notable: fx.unusual >= 1,
     })
   }
@@ -192,6 +202,7 @@ export function buildFootprints(kospi) {
   if (Number.isFinite(foreign)) {
     prints.push({
       tag: 'flow', text: `외국인 ${formatEok(foreign)} ${foreign < 0 ? '순매도' : '순매수'}`,
+      statement: `외국인이 ${formatEok(foreign)}어치를 ${foreign < 0 ? '팔아서' : '사서'}`,
       agrees: Math.sign(foreign) === direction, notable: Math.abs(foreign) >= NOTABLE_FLOW_EOK,
     })
   }
@@ -200,6 +211,7 @@ export function buildFootprints(kospi) {
     const strongest = leaders.reduce((a, b) => (Math.abs(b.changePercent) > Math.abs(a.changePercent) ? b : a))
     prints.push({
       tag: 'leader', text: `${strongest.label} ${signed(strongest.changePercent)}`,
+      statement: `${subject(strongest.label)} ${moved(strongest.changePercent, 3)}`,
       agrees: Math.sign(strongest.changePercent) === direction,
       notable: Math.abs(strongest.changePercent) > Math.abs(kospi.changeRate),
     })

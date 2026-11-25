@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { buildFacts } from '../domain/facts'
-import { CONFIDENCE, DEMO_NEWS, GUESS_CHOICES, guessChoiceFor, SCENE_TAGS, SENTIMENTS } from '../domain/news'
+import { CONFIDENCE, DEMO_NEWS, SCENE_TAGS, SENTIMENTS } from '../domain/news'
 
 const RESULT_WORD = { rise: '상승', fall: '하락', flat: '보합' }
 
@@ -13,26 +13,41 @@ const sourceLabel = (sources) => {
   return outlets.length > 1 ? `${outlets[0]} 외 ${outlets.length - 1}곳` : outlets[0] ?? '기사 보기'
 }
 
-const FOG_CHOICE = { key: 'fog', icon: '🌫️', label: '뚜렷한 범인 없음', hint: '안개 낀 날' }
-const ALL_CHOICES = [...GUESS_CHOICES, FOG_CHOICE]
+// 맞히기 보기 세 개: 정답(오늘의 범인)과, 오늘 실제로 일어난 일 가운데 그럴듯한 둘.
+// 섬의 은유를 모르는 처음 온 사람도 고를 수 있게 쉬운 문장으로만 쓴다. 정답 자리는 날마다 바뀐다.
+function buildChoices(culprit, footprints) {
+  const plausible = (item) => (item.notable ? 2 : 0) + (item.agrees ? 1 : 0)
+  const others = (footprints ?? [])
+    .filter((item) => item.tag !== culprit.tag && item.statement)
+    .sort((a, b) => plausible(b) - plausible(a))
+    .slice(0, 2)
+    .map((item) => ({ key: item.tag, text: item.statement, print: item }))
+  const list = [{ key: 'culprit', text: `${culprit.title} 때문에` }, ...others]
+  const shift = [...culprit.title].reduce((sum, char) => sum + char.charCodeAt(0), 0) % list.length
+  return [...list.slice(shift), ...list.slice(0, shift)]
+}
+
+// 오늘 결과 한 줄: 원인을 묻기 전에 먼저 무엇이 일어났는지 보여준다.
+function resultHeadline(changeRate) {
+  if (!Number.isFinite(changeRate)) return '오늘 코스피는 어땠을까요?'
+  const size = Math.abs(changeRate)
+  if (size < 0.3) return `오늘 코스피는 거의 움직이지 않았어요 (${changeRate > 0 ? '+' : ''}${changeRate.toFixed(2)}%)`
+  return `오늘 코스피가 ${size.toFixed(2)}% ${size >= 1.5 ? '크게 ' : ''}${changeRate > 0 ? '올랐어요' : '내렸어요'}`
+}
+
+// 받침이 있으면 "이었어요", 없으면 "였어요"
+const wasIt = (word) => {
+  const code = word.charCodeAt(word.length - 1) - 0xac00
+  return code >= 0 && code <= 11171 && code % 28 === 0 ? `${word}였어요` : `${word}이었어요`
+}
 
 // 맞히기 뒤에 보여줄 한두 문장. 점수나 기록은 남기지 않는다: 틀려도 배울 거리만 준다.
-function guessFeedback({ guess, culprit, footprints, characterName }) {
-  const answer = culprit ? guessChoiceFor(culprit.tag) : FOG_CHOICE
-  if (guess === answer.key) {
-    return { tone: 'right', text: culprit ? `맞혔어요! 기사들도 ${answer.label} 쪽을 가리켰어요.` : `맞혔어요! 오늘은 기사들이 한목소리로 짚은 원인이 없었어요.` }
+function guessFeedback(choice, culprit) {
+  if (choice.key === 'culprit') return { tone: 'right', text: '맞혔어요! 기사들도 같은 걸 오늘의 원인으로 짚었어요.' }
+  if (choice.print?.agrees && choice.print.notable) {
+    return { tone: 'close', text: `그것도 오늘 실제로 일어난 일이에요(${choice.print.text}). 다만 기사들은 그보다 "${culprit.title}" 쪽을 더 큰 원인으로 봤어요.` }
   }
-  if (!culprit) {
-    return { tone: 'other', text: '오늘은 기사들이 한목소리로 짚은 원인이 없었어요. 시장은 뚜렷한 이유 없이도 출렁여요.' }
-  }
-  const lead = `이번엔 ${answer.icon} ${answer.label}(${answer.hint}) 쪽이었어요.`
-  if (guess === 'fog') return { tone: 'other', text: `${lead} 오늘은 여러 언론사가 같은 원인을 짚었어요.` }
-  const picked = ALL_CHOICES.find((choice) => choice.key === guess)
-  const print = footprints?.find((item) => picked?.tags?.includes(item.tag))
-  if (print?.agrees && print.notable) {
-    return { tone: 'close', text: `${lead} 고른 ${picked.label}도 같은 쪽을 가리켰어요(${print.text}). ${characterName}가 보기엔 그건 결과에 가깝고, 기사들은 그 배경을 짚었어요.` }
-  }
-  return { tone: 'other', text: lead }
+  return { tone: 'other', text: `이번엔 ${wasIt(culprit.title)}. 고른 쪽은 오늘 그렇게 크게 움직이지 않았어요(${choice.print?.text ?? ''}).` }
 }
 
 function Footprints({ footprints }) {
@@ -42,11 +57,9 @@ function Footprints({ footprints }) {
       <span className="case-label">숫자 발자국</span>
       <ul className="footprints">
         {footprints.map((item) => {
-          const choice = guessChoiceFor(item.tag)
           const mark = !item.notable ? '잔잔' : item.agrees ? '같은 쪽' : '반대쪽'
           return (
             <li key={item.tag} className={`${item.notable ? '' : 'calm'} ${item.agrees ? 'agrees' : 'against'}`}>
-              <span aria-hidden="true">{choice.icon}</span>
               <span>{item.text}</span>
               <b>{mark}</b>
             </li>
@@ -65,7 +78,6 @@ function Suspects({ suspects, label }) {
       <ul className="suspects">
         {suspects.map((item) => (
           <li key={item.title}>
-            <span aria-hidden="true">{guessChoiceFor(item.tag).icon}</span>
             <span>{item.title}</span>
             {item.outletCount > 0 && <small>언론사 {item.outletCount}곳</small>}
           </li>
@@ -77,30 +89,29 @@ function Suspects({ suspects, label }) {
 
 // 오늘의 범인 수사: 먼저 맞혀 보고(건너뛰기 가능) → 범인, 확신도, 숫자 발자국, 다른 용의자.
 // 뚜렷한 범인이 없는 날은 억지로 만들지 않고 "안개 낀 날"로 보여준다.
-function CulpritCase({ culprit, quietTitle, quietMessage, suspects, footprints, result, marketState, characterName }) {
-  const [guess, setGuess] = useState(null)
+function CulpritCase({ culprit, quietTitle, quietMessage, suspects, footprints, result, changeRate, marketState }) {
+  // 범인이 없는 날은 맞히기 없이 바로 안개 카드
+  const [guess, setGuess] = useState(culprit ? null : 'skipped')
+  const choices = culprit ? buildChoices(culprit, footprints) : []
 
   if (guess === null) {
     return (
-      <section className="culprit-card guess-card" aria-label="오늘의 범인 맞히기">
-        <span className="culprit-label">오늘의 범인</span>
-        <strong>오늘 바다를 흔든 건 무엇이었을까요?</strong>
-        <p>{characterName}의 섬에서 하나 골라 보세요. 맞혀도 틀려도 기록은 남지 않아요.</p>
-        <div className="guess-grid">
-          {ALL_CHOICES.map((choice) => (
-            <button key={choice.key} type="button" className="guess-choice" onClick={() => setGuess(choice.key)}>
-              <span aria-hidden="true">{choice.icon}</span>
-              <b>{choice.label}</b>
-              <small>{choice.hint}</small>
+      <section className={`culprit-card guess-card ${marketState}`} aria-label="오늘의 범인 맞히기">
+        <strong>{resultHeadline(changeRate)}</strong>
+        <p>왜 그랬을 것 같아요? 맞혀도 틀려도 기록은 남지 않아요.</p>
+        <div className="guess-list">
+          {choices.map((choice) => (
+            <button key={choice.key} type="button" className="guess-choice" onClick={() => setGuess(choice)}>
+              {choice.text}
             </button>
           ))}
         </div>
-        <button type="button" className="text-button guess-skip" onClick={() => setGuess('skipped')}>그냥 바로 볼래요</button>
+        <button type="button" className="text-button guess-skip" onClick={() => setGuess('skipped')}>잘 모르겠어요, 바로 볼래요</button>
       </section>
     )
   }
 
-  const feedback = guess === 'skipped' ? null : guessFeedback({ guess, culprit, footprints, characterName })
+  const feedback = guess === 'skipped' ? null : guessFeedback(guess, culprit)
   const confidence = culprit ? CONFIDENCE[culprit.confidence] : null
   return (
     <>
@@ -111,7 +122,7 @@ function CulpritCase({ culprit, quietTitle, quietMessage, suspects, footprints, 
             <span className="culprit-label">오늘의 범인</span>
             {confidence && <span className={`confidence ${culprit.confidence}`} title={confidence.note}>{confidence.label}</span>}
           </div>
-          <strong><span aria-hidden="true">{guessChoiceFor(culprit.tag).icon}</span> {culprit.title}</strong>
+          <strong>{culprit.title}</strong>
           {culprit.summary && <p>{culprit.summary}</p>}
           <ol className="cause-chain">
             {[...(culprit.chain ?? []), result].filter(Boolean).map((step) => <li key={step}>{step}</li>)}
@@ -133,7 +144,7 @@ function CulpritCase({ culprit, quietTitle, quietMessage, suspects, footprints, 
         </section>
       ) : (
         <section className="culprit-card quiet fog-card" aria-label="안개 낀 날">
-          <span className="culprit-label">🌫️ 안개 낀 날</span>
+          <span className="culprit-label">안개 낀 날</span>
           <strong>{quietTitle ?? '뚜렷한 범인이 없는 날이에요'}</strong>
           <p>{quietMessage}</p>
           <p className="confidence-note">시장은 뚜렷한 이유 없이도 움직여요. 이런 날 억지로 이유를 붙이지 않는 것도 시장을 읽는 힘이에요.</p>
@@ -153,7 +164,7 @@ function AiBriefing({ briefing, marketState, changeRate, characterName }) {
     <>
       <CulpritCase
         culprit={culprit} quietMessage={briefing.quietMessage} suspects={briefing.suspects} footprints={briefing.footprints}
-        result={result} marketState={marketState} characterName={characterName}
+        result={result} changeRate={changeRate} marketState={marketState}
       />
 
       <div className="news-list-head">
@@ -239,7 +250,7 @@ function SampleBriefing({ briefing, marketState, changeRate, characterName }) {
       <CulpritCase
         culprit={briefing.culprit} quietTitle={briefing.quietTitle} quietMessage={briefing.quietMessage}
         suspects={briefing.suspects} footprints={briefing.footprints}
-        result={result} marketState={marketState} characterName={characterName}
+        result={result} changeRate={changeRate} marketState={marketState}
       />
 
       <div className="news-list-head">
