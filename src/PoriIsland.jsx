@@ -1365,6 +1365,9 @@ export default function PoriIsland({
 
       // --- boats ---
       boats.forEach((boat) => {
+        // null = this part of the island isn't open yet: the boat stays out of sight
+        boat.present = damp(boat.present ?? 0, input[boat.key] === null ? 0 : 1, 1.5, dt)
+        boat.outer.visible = boat.present > 0.02
         boat.flow = damp(boat.flow, THREE.MathUtils.clamp(input[boat.key] ?? 0, -1, 1), 1.1, dt)
         const arrive = THREE.MathUtils.smoothstep(boat.flow, -1, 1)
         const x = THREE.MathUtils.lerp(boat.away.x, boat.berth.x, arrive)
@@ -1375,7 +1378,7 @@ export default function PoriIsland({
         const slope = (waveHeight(x * 0.75 + 0.3, z * 0.75, waveTime, rough) - waveHeight(x * 0.75 - 0.3, z * 0.75, waveTime, rough)) * SWELL / 0.6
         boat.outer.position.set(x, seaLevel + waveHeight(x * 0.75, z * 0.75, waveTime, rough) * SWELL - 0.02, z)
         boat.outer.rotation.y = boat.heading
-        boat.outer.scale.setScalar(1.25)
+        boat.outer.scale.setScalar(1.25 * Math.max(boat.present, 0.001))
         boat.tilt.rotation.z = Math.atan(slope) * 0.6 + Math.sin(now * 1.9 + boat.berth.z) * 0.035 * motion
         boat.tilt.rotation.x = Math.sin(now * 1.4 + boat.berth.z * 2) * (0.04 + rough * 0.12) * motion
         boat.crates.forEach((crate, index) => {
@@ -1652,7 +1655,7 @@ export default function PoriIsland({
       placeHotspot('bottles', bottles[0].outer.position.x, bottles[0].outer.position.y + 0.15, bottles[0].outer.position.z, bottles[0].shown > 0.5)
       placeHotspot('fishing', 4.6, GROUND_Y + 0.25, SPOTS.dock.z, !input.fishing && ['rise', 'flat', 'fall'].includes(state) && input.fish?.length > 0)
       placeHotspot('weather', weather.root.position.x, weather.root.position.y, weather.root.position.z, Number.isFinite(usLevel) && ['rise', 'flat', 'fall'].includes(state))
-      boats.forEach((boat) => placeHotspot(boat.key, boat.outer.position.x, boat.outer.position.y + 0.4, boat.outer.position.z, true))
+      boats.forEach((boat) => placeHotspot(boat.key, boat.outer.position.x, boat.outer.position.y + 0.4, boat.outer.position.z, boat.present > 0.5))
       whales.forEach((whale) => placeHotspot(whale.key, whale.outer.position.x, whale.outer.position.y + 0.15, whale.outer.position.z, whale.shown > 0.5))
       school.forEach((item, index) => placeHotspot(`fish${index}`, item.outer.position.x, item.outer.position.y + 0.1, item.outer.position.z, item.shown > 0.5))
 

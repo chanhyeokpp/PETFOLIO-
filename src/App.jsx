@@ -7,6 +7,7 @@ import MarketSelect from './screens/MarketSelect'
 import NewsBriefing from './screens/NewsBriefing'
 import ShellChest from './ShellChest'
 import LetterPanel from './LetterPanel'
+import { ELEMENTS, resolveIsland, saveIsland, startIsland } from './domain/island'
 import { markShellsSeen, readSeenDay, readShells, readSince, saveShell, saveShells, shellFromBriefing } from './domain/shells'
 import './App.css'
 
@@ -23,6 +24,8 @@ const SCENE_MODE = URL_PARAMS.get('scene') === 'sea' ? 'sea' : 'island'
 const SCREEN_PARAM = ['select', 'news', 'scene'].includes(URL_PARAMS.get('screen')) ? URL_PARAMS.get('screen') : null
 const DEMO_PARAM = ['rise', 'flat', 'fall', 'closed'].includes(URL_PARAMS.get('demo')) ? URL_PARAMS.get('demo') : null
 const OPEN_PARAM = URL_PARAMS.get('open')
+//   ?island=new   처음 온 사람의 섬으로 보기 (저장하지 않음)
+const ISLAND_PREVIEW = URL_PARAMS.get('island') === 'new'
 
 // 오늘 이야기의 분류 → 포리가 가 있는 곳
 const PLACE_BY_TAG = { flow: 'dock', us: 'lighthouse', fx: 'lighthouse', leader: 'shore', stock: 'shore' }
@@ -141,6 +144,9 @@ function App() {
   const [freshDays, setFreshDays] = useState([])
   // 수평선 병편지 (다가오는 일정). undefined = 받는 중, null = 못 받음
   const [letters, setLetters] = useState(undefined)
+  // 섬이 점점 열린다: 방문 기록과 이미 연 요소
+  const [islandStart] = useState(() => startIsland(getTodayKst(), { preview: ISLAND_PREVIEW }))
+  const [introduced, setIntroduced] = useState(islandStart.introduced)
   // 낚시: null | { phase: 'cast' | 'caught', index, news }
   const [fishing, setFishing] = useState(null)
   const fishingTimer = useRef(null)
@@ -369,6 +375,29 @@ function App() {
     // todayShell은 매 렌더 새로 만들어지므로 내용이 바뀔 때만 저장
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todayShellKey])
+  // 오늘 무엇이 열렸나. 시장 데이터가 다 온 뒤에 한 번 정한다(데이터가 오는 중에 나타났다 사라지지 않게).
+  const islandReady = dataMode !== 'loading' && briefing !== undefined && letters !== undefined
+  const islandMarket = dataMode === 'live' ? {
+    flows: flowMode === 'live' ? flows : null,
+    drivers,
+    movers: moverMode === 'live' ? movers : [],
+    culpritTag: briefing?.culprit?.tag ?? null,
+    letters: letters?.upcoming ?? [],
+  } : null
+  const unlocked = islandReady ? resolveIsland(islandStart, getTodayKst(), islandMarket) : islandStart.unlocked
+  const isOpen = (key) => Boolean(unlocked[key])
+  const unlockedKey = Object.keys(unlocked).sort().join(',')
+  useEffect(() => {
+    saveIsland(islandStart, unlocked, introduced)
+    // unlocked는 매 렌더 새 객체라 열린 목록으로만 비교
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unlockedKey, introduced, islandStart])
+  const arrival = ELEMENTS.find((element) => unlocked[element.key] && !introduced.includes(element.key)) ?? null
+  const meetArrival = (go) => {
+    if (!arrival) return
+    setIntroduced((current) => [...current, arrival.key])
+    if (go) pick(arrival.pickKey)
+  }
   const latestShellDay = Object.keys(shells).sort().at(-1) ?? null
   const hasNewShell = latestShellDay !== null && latestShellDay !== shellsSeenDay
 
@@ -491,7 +520,7 @@ function App() {
           drivers={drivers}
           news={news}
           briefing={briefing}
-          nextLetter={letters?.upcoming?.[0] ?? null}
+          nextLetter={isOpen('bottles') ? letters?.upcoming?.[0] ?? null : null}
           onDone={finishNews}
         />
       )}
@@ -578,13 +607,13 @@ function App() {
             {SCENE_MODE === 'island' ? (
               <PoriIsland
                 marketState={marketState} touchSignal={reactionTick} waterLevel={tradingActivity} volatility={volatility}
-                foreignFlow={toFlowLevel(flows.foreign)}
-                institutionFlow={toFlowLevel(flows.institution)}
+                foreignFlow={isOpen('boats') ? toFlowLevel(flows.foreign) : null}
+                institutionFlow={isOpen('boats') ? toFlowLevel(flows.institution) : null}
                 overnight={causeLevel('us')}
-                wind={causeLevel('fx')}
-                samsung={isUnavailable ? null : causeLevel('samsung')}
-                hynix={isUnavailable ? null : causeLevel('hynix')}
-                fish={isUnavailable ? null : fish}
+                wind={isOpen('wind') ? causeLevel('fx') : 0}
+                samsung={isUnavailable || !isOpen('whales') ? null : causeLevel('samsung')}
+                hynix={isUnavailable || !isOpen('whales') ? null : causeLevel('hynix')}
+                fish={isUnavailable || !isOpen('fish') ? null : fish}
                 focus={focus}
                 onPick={pick}
                 selected={fishing ? 'fishing' : picked ?? (reaction ? 'pori' : null)}
@@ -597,7 +626,7 @@ function App() {
                 } : null}
                 onFishingCaught={() => hookFish()}
                 foggy={isFoggy}
-                letters={letters?.upcoming?.filter((letter) => letter.dday <= 10).slice(0, 3).map((letter) => ({ dday: letter.dday })) ?? null}
+                letters={!isOpen('bottles') ? null : letters?.upcoming?.filter((letter) => letter.dday <= 10).slice(0, 3).map((letter) => ({ dday: letter.dday })) ?? null}
               />
             ) : (
             <Pori3D marketState={marketState} touchSignal={reactionTick} waterLevel={tradingActivity} volatility={volatility}
@@ -683,6 +712,17 @@ function App() {
                   ))}
                 </ul>
               )}
+            </aside>
+          ) : arrival && !fishing && !reaction ? (
+            <aside className="scene-info arrival-card" aria-live="polite">
+              <span className="arrival-eyebrow">🎉 섬에 새 친구가 왔어요</span>
+              <strong><span aria-hidden="true">{arrival.icon}</span> {arrival.label}</strong>
+              {unlocked[arrival.key]?.reason && <p className="arrival-reason">{unlocked[arrival.key].reason}</p>}
+              <p>{arrival.about}</p>
+              <div className="arrival-actions">
+                <button type="button" className="arrival-go" onClick={() => meetArrival(true)}>보러 가기</button>
+                <button type="button" className="text-button" onClick={() => meetArrival(false)}>알겠어요</button>
+              </div>
             </aside>
           ) : (
             <div className={`speech ${reaction ? 'reacting' : ''}`} aria-live="polite">

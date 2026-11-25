@@ -495,3 +495,15 @@ h1,.screen-title,.culprit-card strong,.news-body > strong,.news-body a { word-br
 .letter-panel header strong { color: #24515a; }
 .next-letter { margin: 0; padding: 12px 16px; color: #3d5a60; background: #eaf6f5; border-radius: 16px; font-size: 14px; line-height: 1.55; word-break: keep-all; }
 .next-letter b { color: #24515a; }
+
+/* 섬에 새 친구가 왔어요 */
+.arrival-card { right: auto; width: min(340px, calc(100% - 40px)); top: 20px; bottom: auto; background: linear-gradient(160deg,#fffaf0,#fff); border: 1px solid #f1e4c8; }
+.arrival-eyebrow { color: #b27a1d; font-size: 12.5px; font-weight: 850; }
+.arrival-card strong { color: #26282c; font-size: 19px; letter-spacing: -.02em; }
+.scene-info p.arrival-reason { color: #6b5418; font-weight: 750; }
+.arrival-actions { display: flex; align-items: center; gap: 10px; margin-top: 2px; }
+.arrival-go { padding: 8px 16px; color: #fff; background: #2b2f36; border: 0; border-radius: 999px; font: inherit; font-size: 13px; font-weight: 800; cursor: pointer; }
+.arrival-go:hover { background: #1f7f68; }
+@media (max-width: 760px) {
+  .arrival-card { top: auto; bottom: 12px; left: 12px; right: 12px; width: auto; }
+}
