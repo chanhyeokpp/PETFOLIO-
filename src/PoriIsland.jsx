@@ -608,11 +608,14 @@ export default function PoriIsland({
   foggy = false,
   // upcoming events as bottles on the horizon: [{ dday }], nearest first (up to 3)
   letters = null,
+  // arrive from the sky: the camera starts high above (in the clouds) and circles down onto the island
+  descendOnMount = false,
 }) {
   const hostRef = useRef(null)
   const hotspotRefs = useRef({})
   const dataRef = useRef(null)
   const touchRef = useRef({ signal: touchSignal, at: -10 })
+  const descendRef = useRef(descendOnMount)
 
   useEffect(() => {
     dataRef.current = {
@@ -988,13 +991,18 @@ export default function PoriIsland({
     const homeTarget = target.clone()
     const lookPoint = target.clone()
     const zoomPoint = new THREE.Vector3()
+    // 1 = still high in the clouds, eases to 0 as the camera comes down
+    let descend = descendRef.current ? 1 : 0
     const placeCamera = () => {
-      const cosPitch = Math.cos(view.pitch)
-      const distance = view.distance * (1 - view.zoom * 0.5)
+      // coming down from the sky: steeper, farther, and turning a little as it lands
+      const pitch = Math.min(1.48, view.pitch + descend * 0.95)
+      const yaw = view.yaw + descend * 0.7
+      const cosPitch = Math.cos(pitch)
+      const distance = view.distance * (1 - view.zoom * 0.5) * (1 + descend * 1.5)
       camera.position.set(
-        lookPoint.x + distance * cosPitch * Math.sin(view.yaw),
-        lookPoint.y + distance * Math.sin(view.pitch),
-        lookPoint.z + distance * cosPitch * Math.cos(view.yaw),
+        lookPoint.x + distance * cosPitch * Math.sin(yaw),
+        lookPoint.y + distance * Math.sin(pitch),
+        lookPoint.z + distance * cosPitch * Math.cos(yaw),
       )
       camera.lookAt(lookPoint)
     }
@@ -1637,6 +1645,8 @@ export default function PoriIsland({
       })
 
       // --- camera ---
+      // ease-out descent; snap to 0 once it's close so it doesn't creep forever
+      if (descend > 0) descend = descend < 0.002 ? 0 : damp(descend, 0, 1.4, Math.min(dt, 0.05))
       view.yaw = damp(view.yaw, view.yawTarget, 6, dt)
       view.pitch = damp(view.pitch, view.pitchTarget, 6, dt)
       const point = selectionPoint(input.selected)

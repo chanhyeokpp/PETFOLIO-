@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { pageOf, SAMPLE_SHELLS, SHELL_PAGES, similarDays, sortShells, VERDICTS } from './domain/shells'
 
 const SHELL_COLORS = { rise: '#ff9f8f', fall: '#8fb8f5', flat: '#f3dcae' }
@@ -40,6 +40,36 @@ function ShellButton({ shell, active, onPick, showPage = false, fresh = false, t
       <small>{showPage && <span aria-hidden="true">{pageOf(shell).icon} </span>}{formatDay(shell.day)}</small>
       <span>{shell.title}</span>
     </button>
+  )
+}
+
+const BROKER_STAMPS = {
+  same: { label: '증권사도 같은 원인', tone: 'same' },
+  partly: { label: '증권사는 일부만 같게 봄', tone: 'partly' },
+  different: { label: '증권사는 다르게 봄', tone: 'different' },
+}
+
+// 증권사 확인 도장: 다음 날 아침까지 나온 증권사 시황 리포트 제목과 그날의 범인을 견준 결과.
+function BrokerStamp({ check }) {
+  if (!check) return null
+  if (check === 'loading') return <p className="broker-stamp waiting">증권사 시황 리포트와 견주는 중이에요…</p>
+  if (check.status === 'waiting') return <p className="broker-stamp waiting">증권사 시황 리포트가 아직 모이지 않았어요. 다음 날 아침쯤 확인 도장이 찍혀요.</p>
+  const result = check.brokerCheck
+  if (!result) return null
+  const stamp = BROKER_STAMPS[result.stamp] ?? BROKER_STAMPS.partly
+  return (
+    <div className={`broker-stamp ${stamp.tone}`}>
+      <span className="broker-mark">{stamp.label}</span>
+      <p>{result.note}</p>
+      <small>
+        {result.reports.map((report, index) => (
+          <span key={report.link}>
+            {index > 0 && ' · '}
+            <a href={report.link} target="_blank" rel="noopener noreferrer" title={report.title}>{report.source}</a>
+          </span>
+        ))}
+      </small>
+    </div>
   )
 }
 
@@ -120,6 +150,22 @@ export default function ShellChest({ shells, freshDays = [], onClose }) {
   const pages = SHELL_PAGES.map((page) => ({ ...page, shells: list.filter((shell) => pageOf(shell) === page) }))
   // 재판 결과: day → 'loading' | { trial } | { error }
   const [trials, setTrials] = useState({})
+  // 증권사 확인: day → 'loading' | { status, brokerCheck }
+  const [checks, setChecks] = useState({})
+  const [today] = useState(() => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date()))
+  const activeCheckDay = active && !isSample && !active.brokerCheck && active.day < today && active.title !== '조용한 날' ? active.day : null
+  useEffect(() => {
+    if (!activeCheckDay || checks[activeCheckDay]) return undefined
+    let cancelled = false
+    const id = window.setTimeout(() => {
+      setChecks((current) => ({ ...current, [activeCheckDay]: 'loading' }))
+      fetch(`/api/broker-check?day=${activeCheckDay}`)
+        .then((response) => (response.ok ? response.json() : null))
+        .catch(() => null)
+        .then((data) => { if (!cancelled) setChecks((current) => ({ ...current, [activeCheckDay]: data ?? { status: 'error' } })) })
+    }, 0)
+    return () => { cancelled = true; window.clearTimeout(id) }
+  }, [activeCheckDay, checks])
   const fresh = new Set(isSample ? [] : freshDays)
   const trialOf = (shell) => trials[shell.day]?.trial ?? shell.trial ?? null
   const readyCount = list.filter((shell) => shell.status === 'ready' && !trialOf(shell)).length
@@ -208,6 +254,7 @@ export default function ShellChest({ shells, freshDays = [], onClose }) {
               출처: {active.source.name || '기사 보기'}
             </a>
           )}
+          <BrokerStamp check={active.brokerCheck ? { status: 'done', brokerCheck: active.brokerCheck } : checks[active.day]} />
           <TrialBlock shell={active} state={trials[active.day]} onOpen={openTrial} />
           {similar?.days.length > 0 && (
             <div className="shell-similar">

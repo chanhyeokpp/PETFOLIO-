@@ -132,6 +132,12 @@ function App() {
   // undefined = 아직 받는 중, null = 못 받음
   const [news, setNews] = useState(undefined)
   const [briefing, setBriefing] = useState(undefined)
+  // 범인을 아직 못 정한 이유와 지난 거래일 이야기 (장 마감 전, 쉬는 날)
+  const [briefingInfo, setBriefingInfo] = useState(null)
+  // 뉴스에서 섬으로 갈 때 구름을 뚫고 내려가는 연출
+  const [diving, setDiving] = useState(false)
+  const [arriveFromSky, setArriveFromSky] = useState(false)
+  const diveTimers = useRef({})
   const [reaction, setReaction] = useState(null)
   const [reactionTick, setReactionTick] = useState(0)
   // 장면에서 누른 것(배, 날씨, 고래). null이면 말풍선을 보여준다.
@@ -239,6 +245,8 @@ function App() {
   useEffect(() => () => {
     window.clearTimeout(reactionTimer.current)
     window.clearTimeout(fishingTimer.current)
+    window.clearTimeout(diveTimers.current.swap)
+    window.clearTimeout(diveTimers.current.end)
   }, [])
 
   useEffect(() => {
@@ -251,7 +259,11 @@ function App() {
     fetch('/api/briefing')
       .then((response) => (response.ok ? response.json() : null))
       .catch(() => null)
-      .then((data) => { if (!cancelled) setBriefing(data?.briefing ?? null) })
+      .then((data) => {
+        if (cancelled) return
+        setBriefing(data?.briefing ?? null)
+        setBriefingInfo(data ? { reason: data.reason ?? null, previous: data.previous ?? null } : null)
+      })
     // 지난 거래일 조개: 들르지 않은 날 것도 서버 기록에서 주워 온다
     fetch(`/api/shells?from=${readSince(getTodayKst())}`)
       .then((response) => (response.ok ? response.json() : null))
@@ -282,7 +294,26 @@ function App() {
 
   const finishNews = () => {
     writeStored(STORAGE_KEYS.newsSeen, getTodayKst())
-    setScreen('scene')
+    let reduce = false
+    try { reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches } catch { /* animate */ }
+    if (SCENE_MODE !== 'island' || reduce) {
+      setScreen('scene')
+      return
+    }
+    // 구름 속으로: 구름이 화면을 덮는 동안 섬으로 바꾸고, 카메라가 하늘에서 내려온다
+    window.clearTimeout(diveTimers.current.swap)
+    window.clearTimeout(diveTimers.current.end)
+    setDiving(true)
+    diveTimers.current.swap = window.setTimeout(() => {
+      setArriveFromSky(true)
+      setScreen('scene')
+      window.scrollTo(0, 0)
+    }, 650)
+    diveTimers.current.end = window.setTimeout(() => {
+      setDiving(false)
+      // 섬이 이미 내려앉았으니, 다른 화면에서 돌아올 땐 내려오지 않는다
+      setArriveFromSky(false)
+    }, 2100)
   }
 
   const stopFishing = () => {
@@ -494,6 +525,20 @@ function App() {
 
   return (
     <div className={`app-shell ${screen === 'scene' && SCENE_MODE === 'island' ? 'full-scene' : ''}`}>
+      {diving && (
+        <div className="cloud-dive" aria-hidden="true">
+          {[
+            [-30, -20, -70, -60], [25, -25, 80, -70], [-35, 20, -90, 70], [30, 22, 85, 75],
+            [0, -35, 0, -110], [0, 30, 10, 110], [-10, 0, -40, 10], [12, 4, 40, -10],
+          ].map(([x0, y0, x1, y1], index) => (
+            <span
+              key={index}
+              className="puff"
+              style={{ '--x0': `${x0}vw`, '--y0': `${y0}vh`, '--x1': `${x1}vw`, '--y1': `${y1}vh`, '--d': `${(index % 4) * 0.12}s` }}
+            />
+          ))}
+        </div>
+      )}
       <header className="topbar">
         <a className="brand" href="#top" aria-label="petfolio 홈">
           petfolio<span>!</span>
@@ -520,6 +565,7 @@ function App() {
           drivers={drivers}
           news={news}
           briefing={briefing}
+          briefingInfo={briefingInfo}
           nextLetter={isOpen('bottles') ? letters?.upcoming?.[0] ?? null : null}
           onDone={finishNews}
         />
@@ -626,6 +672,7 @@ function App() {
                 } : null}
                 onFishingCaught={() => hookFish()}
                 foggy={isFoggy}
+                descendOnMount={arriveFromSky}
                 letters={!isOpen('bottles') ? null : letters?.upcoming?.filter((letter) => letter.dday <= 10).slice(0, 3).map((letter) => ({ dday: letter.dday })) ?? null}
               />
             ) : (
