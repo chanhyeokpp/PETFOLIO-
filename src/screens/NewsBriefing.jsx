@@ -366,8 +366,36 @@ function LiveFacts({ changeRate, flows, drivers, message }) {
   )
 }
 
+// ---------- 수평선 병편지 예고: 물결 위에 떠 있는 병 그림 + 다가오는 일정. 누르면 섬에서 편지를 연다 ----------
+function LetterTeaser({ letter, onOpen }) {
+  const when = letter.dday === 0 ? '오늘' : letter.dday === 1 ? '내일' : `D-${letter.dday}`
+  return (
+    <button type="button" className="letter-teaser" onClick={onOpen}>
+      <svg className="teaser-art" viewBox="0 0 96 72" aria-hidden="true">
+        <path className="teaser-wave back" d="M-20 50 Q -8 44 4 50 T 28 50 T 52 50 T 76 50 T 100 50 T 124 50 V 72 H -20 Z" />
+        <g className="teaser-bottle">
+          <g transform="rotate(-24 48 38)">
+            <rect x="30" y="30" width="34" height="18" rx="8" className="glass" />
+            <rect x="62" y="35" width="10" height="8" rx="2" className="glass" />
+            <rect x="71" y="35.5" width="6" height="7" rx="1.5" className="cork" />
+            <rect x="36" y="34" width="22" height="10" rx="3" className="paper" />
+            <rect x="45" y="34" width="3" height="10" className="ribbon" />
+          </g>
+        </g>
+        <path className="teaser-wave front" d="M-20 56 Q -8 51 4 56 T 28 56 T 52 56 T 76 56 T 100 56 T 124 56 V 72 H -20 Z" />
+      </svg>
+      <span className="teaser-text">
+        <small>수평선에 병편지가 떠내려왔어요</small>
+        <strong><em className={letter.dday <= 1 ? 'soon' : ''}>{when}</em>{letter.title}</strong>
+        <span>무엇을 보게 될지 미리 알려줘요</span>
+      </span>
+      <span className="teaser-open" aria-hidden="true">열어 보기 →</span>
+    </button>
+  )
+}
+
 export default function NewsBriefing({
-  marketState, changeRate, characterName, isLive, flows, drivers, news, briefing, briefingInfo, nextLetter, onDone,
+  marketState, changeRate, characterName, isLive, flows, drivers, news, briefing, briefingInfo, nextLetter, onDone, onOpenLetter,
 }) {
   const sample = DEMO_NEWS[marketState]
   const isLoading = marketState === 'loading' || (isLive && news === undefined)
@@ -412,11 +440,7 @@ export default function NewsBriefing({
         <p className="case-banner">오늘 소식을 가져오지 못했어요. 바로 {characterName}를 만나러 가도 괜찮아요.</p>
       )}
 
-      {nextLetter && (
-        <p className="next-letter">
-          수평선에 병편지가 떠 있어요 · <b>{nextLetter.dday === 0 ? '오늘' : nextLetter.dday === 1 ? '내일' : `${nextLetter.dday}일 뒤`} {nextLetter.title}</b>
-        </p>
-      )}
+      {nextLetter && <LetterTeaser letter={nextLetter} onOpen={onOpenLetter ?? onDone} />}
       <button type="button" className="primary-button" onClick={onDone}>{characterName} 보러 가기</button>
     </main>
   )

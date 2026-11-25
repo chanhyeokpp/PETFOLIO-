@@ -139,6 +139,8 @@ function App() {
   const [diving, setDiving] = useState(false)
   const [arriveFromSky, setArriveFromSky] = useState(false)
   const diveTimers = useRef({})
+  // 뉴스 화면에서 고른 것을 섬에 내려앉은 뒤 열어 둔다 (예: 병편지)
+  const [openOnArrive, setOpenOnArrive] = useState(null)
   const [reaction, setReaction] = useState(null)
   const [reactionTick, setReactionTick] = useState(0)
   // 장면에서 누른 것(배, 날씨, 고래). null이면 말풍선을 보여준다.
@@ -456,10 +458,15 @@ function App() {
     pickRef.current = pick
   })
   useEffect(() => {
-    if (!OPEN_PARAM || screen !== 'scene') return undefined
-    const timer = window.setTimeout(() => pickRef.current(OPEN_PARAM), 3500)
+    const target = openOnArrive ?? OPEN_PARAM
+    if (!target || screen !== 'scene') return undefined
+    // 구름을 뚫고 내려앉은 뒤에 연다
+    const timer = window.setTimeout(() => {
+      pickRef.current(target)
+      setOpenOnArrive(null)
+    }, openOnArrive ? 2400 : 3500)
     return () => window.clearTimeout(timer)
-  }, [screen])
+  }, [screen, openOnArrive])
 
 
   const getPickedInfo = () => {
@@ -569,6 +576,10 @@ function App() {
           briefingInfo={briefingInfo}
           nextLetter={isOpen('bottles') ? letters?.upcoming?.[0] ?? null : null}
           onDone={finishNews}
+          onOpenLetter={() => {
+            setOpenOnArrive('bottles')
+            finishNews()
+          }}
         />
       )}
 
