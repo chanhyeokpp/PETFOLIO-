@@ -13,6 +13,7 @@ const CACHE_MS = 10 * 60 * 1000
 // 제목에 "왜"가 들어 있을 가능성이 높은 표현. LLM을 붙이기 전까지 쓰는 임시 기준이다.
 const CAUSE_HINT = /팔자|사자|매도|매수|여파|우려|충격|쇼크|파장|여진|소송|훈풍|기대|덕분|탓|투매|발언/
 const CLOSING_MINUTES_KST = 15 * 60 + 30
+const BLOG_SOURCE = /blog|블로그|tistory|티스토리|brunch|브런치|카페|cafe/i
 
 const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' }
 const decodeEntities = (text) => text
@@ -74,6 +75,8 @@ export function filterRelevant(articles, now = new Date(), keyword = '코스피'
   const seen = new Set()
   return articles.filter((article) => {
     if (!article.title.includes(keyword) || article.title.startsWith('[표]')) return false
+    // 블로그·카페 글은 언론사가 아니다
+    if (BLOG_SOURCE.test(article.source ?? '') || BLOG_SOURCE.test(article.title)) return false
     if (!article.publishedAt) return false
     const published = new Date(article.publishedAt)
     if (withinHours === null ? kstDay(published) !== today : now - published > withinHours * 3600 * 1000) return false

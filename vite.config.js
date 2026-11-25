@@ -6,6 +6,7 @@ import { fetchKospi } from './server/kospi.js'
 import { fetchNews } from './server/news.js'
 import { fetchShells, fetchTrial } from './server/trial.js'
 import { fetchLetters } from './server/letters.js'
+import { fetchBrokerCheck } from './server/brokerCheck.js'
 
 const API_ROUTES = {
   '/api/kospi': { load: fetchKospi, error: 'MARKET_DATA_UNAVAILABLE' },
@@ -15,6 +16,7 @@ const API_ROUTES = {
   '/api/shells': { load: fetchShells, error: 'SHELLS_UNAVAILABLE' },
   '/api/trial': { load: fetchTrial, error: 'TRIAL_UNAVAILABLE' },
   '/api/letters': { load: fetchLetters, error: 'LETTERS_UNAVAILABLE' },
+  '/api/broker-check': { load: fetchBrokerCheck, error: 'BROKER_CHECK_UNAVAILABLE' },
 }
 
 // .env.local의 서버용 키(OPENAI_API_KEY, KRX_AUTH_KEY)를 API 코드가 읽을 수 있게 한다.

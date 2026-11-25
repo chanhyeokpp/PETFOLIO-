@@ -22,7 +22,7 @@ for (const day of days) {
       console.log(`${day} 기사 부족, 건너뜀`)
       continue
     }
-    await putRecord({ ...record, trial: existing?.trial ?? null })
+    await putRecord({ ...record, trial: existing?.trial ?? null, brokerCheck: existing?.brokerCheck ?? null })
     const culprit = record.briefing.culprit
     console.log(`${day} 코스피 ${record.changeRate.toFixed(2)}% → ${culprit ? `${culprit.title} [${culprit.tag}/${culprit.confidence}]` : '안개'}`)
   } catch (error) {

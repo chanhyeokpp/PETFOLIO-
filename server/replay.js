@@ -3,6 +3,7 @@
 import { buildBriefing, CACHE_VERSION } from './briefing.js'
 import { DRIVER_SYMBOLS, fetchDailyBars, summarizeBars, US_SESSION_SECONDS } from './drivers.js'
 import { filterRelevant, parseFeed } from './news.js'
+import { fetchBrokerReports } from './reports.js'
 
 const MIN_HEADLINES = 5
 export const kstDay = (seconds) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date(seconds * 1000))
@@ -81,9 +82,10 @@ export async function replayDay(day, series) {
   if (!apiKey) throw new Error('OPENAI_API_KEY가 없어요')
   const kospi = kospiOn(day, series)
   if (!kospi) return null
-  const headlines = await fetchDayHeadlines(day)
+  const [headlines, reports] = await Promise.all([fetchDayHeadlines(day), fetchBrokerReports(day)])
   if (headlines.length < MIN_HEADLINES) return null
-  const briefing = await buildBriefing(apiKey, kospi, headlines)
+  const closing = reports.filter((report) => report.timing === 'closing')
+  const briefing = await buildBriefing(apiKey, kospi, [...closing, ...headlines])
   return {
     day,
     version: CACHE_VERSION,

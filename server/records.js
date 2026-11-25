@@ -102,5 +102,6 @@ export function toShell(record) {
     generatedAt: briefing.generatedAt ?? null,
     replayed: record.origin === 'replay',
     trial: record.trial ?? null,
+    brokerCheck: record.brokerCheck ?? null,
   }
 }
