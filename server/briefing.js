@@ -26,17 +26,17 @@ const SYSTEM_PROMPT = `너는 한국 주식시장 시황을 초보자에게 설�
 규칙:
 - 제목에 실제로 적힌 내용만 쓴다. 제목에 없는 사실, 숫자, 이름, 추측을 덧붙이지 않는다.
 - culprit: 여러 언론사가 공통으로 지목하는, 오늘 코스피를 움직인 가장 큰 원인 하나.
-  - title: 20자 안팎의 명사구. 예: "엔비디아 실적 우려"
-  - summary: 무슨 일이 있었는지 한두 문장으로, "~했어요" 말투. 제목에 나온 구체적인 이름이나 사건을 담는다.
-  - chain: 원인에서 코스피에 이르는 경로를 2~3단계로. 각 단계는 12자 안팎. 마지막에 코스피 결과는 넣지 않는다(화면이 붙인다).
+  - title: 6~14자 명사구. 마침표·따옴표·"~했어요" 없이. 예: "반도체주 급락", "엔비디아 실적 우려", "젠슨 황 복귀"
+  - summary: 딱 한 문장, 45자 이내, "~했어요"로 끝낸다. 제목에 나온 구체적인 이름이나 사건을 담는다. 예: "엔비디아 실적 우려가 커지며 반도체주가 크게 빠졌어요."
+  - chain: 원인에서 코스피에 이르는 경로를 정확히 2단계로. 각 단계는 10자 이내 명사구. 마지막에 코스피 결과는 넣지 않는다(화면이 붙인다). 예: ["미국 반도체 급락", "외국인 매도"]
   - evidence: 그 원인을 말하는 제목 번호들. 서로 다른 언론사 2곳 이상이 있어야 한다.
   - "외국인 매도/매수"나 "반도체주 약세/강세"는 대개 다른 원인의 결과다. 제목 가운데 그 배경(예: 특정 인물의 발언, 실적, 금리, 정책, 소송, 미국 증시)을 말하는 것이 언론사 2곳 이상 있으면, 수급을 말하는 제목이 더 많더라도 반드시 그 배경을 범인으로 삼고 수급은 chain에 넣는다.
   - 수급(tag: flow)을 범인으로 삼는 것은 어떤 제목도 배경을 말하지 않을 때뿐이다.
 - suspects: 범인 말고도 제목들이 오늘 코스피의 원인으로 지목한 다른 후보 0~2개. 범인과 다른 원인이어야 한다(범인의 결과나 같은 얘기는 안 된다). 없으면 빈 배열.
-  - title: 20자 안팎의 명사구
+  - title: 14자 이내 명사구. 예: "외국인 대량 매도"
   - evidence: 그 후보를 말하는 제목 번호들
   - 뚜렷한 범인이 없는 날(quiet)에도, 제목들이 말한 후보들을 여기에 적는다.
-- 제목들이 뚜렷한 원인을 말하지 않거나 서로 다른 얘기를 하면 culprit은 null, quiet는 true로 하고 quietMessage에 한 문장으로 상황을 적는다.
+- 제목들이 뚜렷한 원인을 말하지 않거나 서로 다른 얘기를 하면 culprit은 null, quiet는 true로 하고 quietMessage에 딱 한 문장(35자 이내, "~했어요")으로 상황을 적는다.
 - items: 알아둘 소식 3~5개. 범인과 관련된 소식을 먼저, 그 밖의 소식을 뒤에.
   - 소식마다 주제가 달라야 한다. 같은 얘기(예: 외국인 매도)는 하나로 묶고 두 번 쓰지 않는다. 수급 소식은 하나, 미국 증시 소식은 하나, 환율 소식은 하나까지만.
   - 범인과 같은 내용을 소식으로 되풀이하지 않는다(범인의 summary가 이미 설명한다). 범인과 다른 구체적인 사건을 소식으로 쓴다.
@@ -45,8 +45,8 @@ const SYSTEM_PROMPT = `너는 한국 주식시장 시황을 초보자에게 설�
   - 오늘 시장이 움직인 것과 관계없는 소식(상장 신청, 인사, 단순 공시, 증권사의 장기 전망)은 넣지 않는다.
   - "코스피가 몇 % 내렸다"처럼 지수 결과만 되풀이하는 소식은 넣지 않는다(화면에 이미 있다). 쓸 만한 소식이 3개뿐이면 3개만 낸다.
   - 소식 자체를 쓴다. "언론이 전했어요", "보도됐어요"처럼 보도 사실을 주어로 쓰지 않는다.
-  - title: 25자 안팎, "~했어요" 말투
-  - summary: 한두 문장, "~했어요" 말투. 단정하기 어려운 인과는 "~영향으로 보여요"처럼 쓴다.
+  - title: 22자 이내, "~했어요"로 끝낸다. 예: "삼성전자·SK하이닉스가 함께 급락했어요"
+  - summary: 딱 한 문장, 45자 이내, "~했어요"로 끝낸다. 단정하기 어려운 인과는 "~영향으로 보여요"처럼 쓴다.
   - 숫자는 기사 제목에 적힌 것만 쓴다. "참고 수치"는 제목을 이해하는 데만 쓰고 문장에 옮겨 적지 않는다(화면이 따로 보여준다).
   - sentiment: 코스피 입장에서 good / bad / neutral
   - evidence: 근거가 된 제목 번호 1~3개
@@ -230,6 +230,14 @@ export function rateConfidence(outletCount, check) {
   return outletCount >= 4 ? 'strong' : 'likely'
 }
 
+// 형식 다듬기: 모델이 규칙을 조금 넘겨도 화면에는 늘 같은 모양으로 나가게 한다.
+const firstSentence = (text) => {
+  const value = String(text ?? '').trim()
+  const match = value.match(/^(.+?[.!?])(\s|$)/)
+  return (match ? match[1] : value).trim()
+}
+const asPhrase = (text) => String(text ?? '').trim().replace(/^["'“”‘’「」]+|["'“”‘’「」.]+$/g, '').trim()
+
 export function shapeBriefing(raw, kospi, headlines) {
   let culprit = null
   if (raw.culprit) {
@@ -237,10 +245,10 @@ export function shapeBriefing(raw, kospi, headlines) {
     // 언론사 두 곳 이상이 말해야 범인으로 인정한다
     if (countOutlets(sources) >= 2) {
       culprit = {
-        title: raw.culprit.title,
-        summary: raw.culprit.summary,
+        title: asPhrase(raw.culprit.title),
+        summary: firstSentence(raw.culprit.summary),
         tag: raw.culprit.tag,
-        chain: raw.culprit.chain.slice(0, 3),
+        chain: raw.culprit.chain.map(asPhrase).filter(Boolean).slice(0, 2),
         outletCount: countOutlets(sources),
         brokerCount: countOutlets(sources.filter((item) => item.kind === 'broker')),
         // 증권사 리포트를 먼저 보여준다
@@ -256,7 +264,7 @@ export function shapeBriefing(raw, kospi, headlines) {
   const suspects = (raw.suspects ?? [])
     .map((item) => {
       const sources = resolveEvidence(item.evidence, headlines)
-      return { title: item.title, tag: item.tag, outletCount: countOutlets(sources), source: sources[0] ?? null }
+      return { title: asPhrase(item.title), tag: item.tag, outletCount: countOutlets(sources), source: sources[0] ?? null }
     })
     .filter((item) => item.outletCount > 0 && item.title !== culprit?.title)
     .slice(0, 2)
@@ -267,7 +275,7 @@ export function shapeBriefing(raw, kospi, headlines) {
   const culpritLinks = new Set(culprit?.allLinks ?? [])
   const items = (raw.items ?? [])
     .map((item) => ({
-      title: item.title, summary: item.summary, sentiment: item.sentiment, tag: item.tag,
+      title: firstSentence(item.title), summary: firstSentence(item.summary), sentiment: item.sentiment, tag: item.tag,
       sources: resolveEvidence(item.evidence, headlines),
     }))
     .filter((item) => {
@@ -288,7 +296,7 @@ export function shapeBriefing(raw, kospi, headlines) {
 
   return {
     culprit,
-    quietMessage: culprit ? null : raw.quietMessage || '기사들이 한목소리로 말하는 원인은 없었어요.',
+    quietMessage: culprit ? null : firstSentence(raw.quietMessage) || '기사들이 한목소리로 말하는 원인은 없었어요.',
     items,
     suspects,
     footprints: buildFootprints(kospi),
@@ -310,7 +318,7 @@ const kstNow = (date = new Date()) => {
 }
 
 // 프롬프트나 결과 형식을 바꾸면 이 숫자를 올린다. 예전 형식의 기록을 오늘 브리핑으로 다시 쓰지 않게 된다.
-export const CACHE_VERSION = 5
+export const CACHE_VERSION = 6
 
 // 그날 확정된 브리핑은 날짜별 기록으로 남긴다. 보물상자와 재판이 이 기록을 쓴다.
 async function readSettled(day) {

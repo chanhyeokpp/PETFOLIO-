@@ -826,3 +826,5 @@ body:has(.full-scene) { overflow-x: clip; }
 .letter-reply { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
 .reply-tag { padding: 2px 8px; color: #6b7279; background: #eef1f4; border-radius: 999px; font-size: 11px; font-weight: 800; }
 .reply-tag.hit { color: #1f6d59; background: #dff7ef; }
+.letter-expect a { margin-left: auto; color: #6b7a86; font-size: 11.5px; font-weight: 700; text-decoration: none; }
+.letter-expect a:hover { text-decoration: underline; }
