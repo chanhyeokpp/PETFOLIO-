@@ -1026,7 +1026,7 @@ export default function PoriIsland({
     // --- whales (heavyweight stocks) and fish (today's movers) in the water in front ---
     const whales = [
       { ...buildWhale('#6f9cf0', '삼성전자'), key: 'samsung', x: -3.0, z: 4.1, size: 2.0 },
-      { ...buildWhale('#f29a6b', '하이닉스'), key: 'hynix', x: -1.2, z: 4.8, size: 1.8 },
+      { ...buildWhale('#f29a6b', 'SK하이닉스'), key: 'hynix', x: -1.2, z: 4.8, size: 1.8 },
     ]
     whales.forEach((whale) => {
       whale.outer.rotation.y = 2.75

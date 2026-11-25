@@ -754,7 +754,7 @@ export default function Pori3D({
     // heavyweight stocks swim in front of Pori, on the side the speech bubble leaves free
     const whales = [
       { ...buildWhale('#6f9cf0', '삼성전자'), key: 'samsung', x: 1.0, z: 0.95, size: 1.12 },
-      { ...buildWhale('#f29a6b', '하이닉스'), key: 'hynix', x: 1.8, z: 0.5, size: 0.96 },
+      { ...buildWhale('#f29a6b', 'SK하이닉스'), key: 'hynix', x: 1.8, z: 0.5, size: 0.96 },
     ]
     whales.forEach((whale) => {
       whale.outer.rotation.y = Math.PI + 0.5
