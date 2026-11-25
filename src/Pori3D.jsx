@@ -364,14 +364,21 @@ export function buildBoat(sailColor) {
 }
 
 // Small name tag that always faces the camera.
+// Name tag drawn on a canvas. Drawn at 2x so it stays sharp up close, and kept out of the fog so the
+// text never turns pale and fuzzy at a distance.
+const LABEL_SCALE = 2
+const LABEL_W = 256
+const LABEL_H = 96
 export function buildLabel(text) {
   const canvas = document.createElement('canvas')
-  canvas.width = 256
-  canvas.height = 96
+  canvas.width = LABEL_W * LABEL_SCALE
+  canvas.height = LABEL_H * LABEL_SCALE
   const context = canvas.getContext('2d')
+  context.scale(LABEL_SCALE, LABEL_SCALE)
   const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = THREE.SRGBColorSpace
-  const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false })
+  texture.anisotropy = 4
+  const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, fog: false })
   const sprite = new THREE.Sprite(material)
   sprite.scale.set(0.5, 0.19, 1)
   sprite.renderOrder = 5
@@ -379,12 +386,12 @@ export function buildLabel(text) {
   label.setText = (next) => {
     if (next === label.text) return
     label.text = next
-    context.clearRect(0, 0, 256, 96)
-    context.fillStyle = 'rgba(255,255,255,0.94)'
+    context.clearRect(0, 0, LABEL_W, LABEL_H)
+    context.fillStyle = 'rgba(255,255,255,0.96)'
     context.beginPath()
     context.roundRect(6, 8, 244, 80, 40)
     context.fill()
-    context.fillStyle = '#2c3440'
+    context.fillStyle = '#1f2630'
     context.textAlign = 'center'
     context.textBaseline = 'middle'
     // long names shrink to fit the tag
