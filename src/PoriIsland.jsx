@@ -104,6 +104,7 @@ const HOTSPOTS = [
   { key: 'lighthouse', label: '등대: 외해(간밤 미국 증시)와 바람 보기', size: 84 },
   { key: 'home', label: '포리 집 보기', size: 84 },
   { key: 'chest', label: '보물상자: 모은 조개 보기', size: 70 },
+  { key: 'bottles', label: '수평선 병편지: 다가오는 일정 보기', size: 64 },
   { key: 'fishing', label: '낚시하기: 오늘의 화제 종목 낚아 올리기', size: 46, action: '🎣' },
   { key: 'weather', label: '날씨: 간밤 미국 증시 보기', size: 88 },
   { key: 'foreign', label: '외국인 배 보기', size: 70 },
@@ -459,6 +460,37 @@ function buildChest() {
   return { group, lid, sparkle, open: 0 }
 }
 
+// a message in a bottle: an upcoming market event drifting in from the horizon
+function buildBottle() {
+  const outer = new THREE.Group()
+  const bottle = new THREE.Group()
+  const glass = new THREE.MeshStandardMaterial({ color: '#7fd8cb', roughness: 0.2, metalness: 0, transparent: true, opacity: 0.82, emissive: '#3fb7a8', emissiveIntensity: 0.18 })
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.26, 16), glass)
+  const shoulder = new THREE.Mesh(new THREE.SphereGeometry(0.085, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), glass)
+  shoulder.position.y = 0.13
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.035, 0.09, 12), glass)
+  neck.position.y = 0.24
+  const cork = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.03, 0.05, 12), standard('#b98552')))
+  cork.position.y = 0.3
+  // the rolled letter inside, tied with a ribbon
+  const paper = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.2, 12), standard('#fff4dc'))
+  const ribbon = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.048, 0.03, 12), standard('#ff8f7d'))
+  bottle.add(body, shoulder, neck, cork, paper, ribbon)
+  // floats lying down, cork up a little
+  bottle.rotation.z = Math.PI / 2 - 0.35
+  outer.add(bottle)
+  // a ring of ripples on the water so the bottle is easy to spot
+  const ripple = new THREE.Mesh(
+    new THREE.RingGeometry(0.2, 0.25, 32),
+    new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false }),
+  )
+  ripple.rotation.x = -Math.PI / 2
+  ripple.position.y = -0.02
+  outer.add(ripple)
+  outer.visible = false
+  return { outer, bottle, ripple, shown: 0, x: 4, z: -3 }
+}
+
 function buildDock() {
   const group = new THREE.Group()
   const wood = standard(PALETTE.wood)
@@ -574,6 +606,8 @@ export default function PoriIsland({
   onFishingCaught = null,
   // no clear culprit today: the sea is wrapped in fog
   foggy = false,
+  // upcoming events as bottles on the horizon: [{ dday }], nearest first (up to 3)
+  letters = null,
 }) {
   const hostRef = useRef(null)
   const hotspotRefs = useRef({})
@@ -583,7 +617,7 @@ export default function PoriIsland({
   useEffect(() => {
     dataRef.current = {
       marketState, waterLevel, volatility, foreign: foreignFlow, institution: institutionFlow,
-      overnight, wind, samsung, hynix, fish, focus, selected, chestNew, fishing, onFishingCaught, foggy,
+      overnight, wind, samsung, hynix, fish, focus, selected, chestNew, fishing, onFishingCaught, foggy, letters,
     }
   })
 
@@ -925,6 +959,11 @@ export default function PoriIsland({
       item.outer.rotation.y = -0.45
       scene.add(item.outer)
     })
+    // bottles drift in from the open sea (north-east, under the weather); nearer dates float closer
+    const bottles = [buildBottle(), buildBottle(), buildBottle()]
+    bottles.forEach((item) => scene.add(item.outer))
+    const BOTTLE_NEAR = { x: 4.05, z: -2.6 }
+    const BOTTLE_FAR = { x: 4.3, z: -4.6 }
 
     // --- sky: weather over the open sea (last night's US market), wind streaks, Zzz ---
     const weather = buildWeather()
@@ -973,6 +1012,12 @@ export default function PoriIsland({
           GROUND_Y + 0.3,
           CHEST_SPOT.z - Math.sin(view.yaw) * 0.9,
         )
+      }
+      if (name === 'bottles') {
+        // the letter list covers the right side, so frame the bottles a little to the right of centre
+        const near = bottles[0].outer.position
+        if (camera.aspect < 1) return zoomPoint.set(near.x, seaLevel - 0.6, near.z)
+        return zoomPoint.set(near.x + Math.cos(view.yaw) * 1.2, seaLevel + 0.3, near.z - Math.sin(view.yaw) * 1.2)
       }
       const boat = boats.find((item) => item.key === name)
       if (boat) return zoomPoint.copy(boat.outer.position).setY(seaLevel + 0.3)
@@ -1401,6 +1446,27 @@ export default function PoriIsland({
         item.tail.rotation.y = Math.sin(now * 7 + index) * 0.45 * motion
       })
 
+      // --- bottles: one per upcoming event, closer as the day nears ---
+      bottles.forEach((item, index) => {
+        const letter = input.letters?.[index]
+        item.shown = damp(item.shown, letter ? 1 : 0, 2, dt)
+        item.outer.visible = item.shown > 0.02
+        if (!letter) return
+        const far = THREE.MathUtils.clamp(letter.dday / 10, 0, 1)
+        const targetX = THREE.MathUtils.lerp(BOTTLE_NEAR.x, BOTTLE_FAR.x, far) + index * 0.55
+        const targetZ = THREE.MathUtils.lerp(BOTTLE_NEAR.z, BOTTLE_FAR.z, far) - index * 0.25
+        item.x = damp(item.x, targetX, 0.8, dt)
+        item.z = damp(item.z, targetZ, 0.8, dt)
+        const drift = Math.sin(now * 0.5 + index * 2) * 0.12 * motion
+        item.outer.position.set(item.x + drift, seaLevel + 0.02 + Math.sin(now * 1.8 + index) * 0.035 * motion, item.z)
+        item.outer.scale.setScalar(2.4 * item.shown * (1.1 - far * 0.3))
+        const pulse = (now * 0.6 + index * 0.33) % 1
+        item.ripple.scale.setScalar(1 + pulse * 1.6)
+        item.ripple.material.opacity = 0.65 * (1 - pulse)
+        item.bottle.rotation.x = Math.sin(now * 1.3 + index) * 0.18 * motion
+        item.outer.rotation.y = 0.6 + Math.sin(now * 0.4 + index) * 0.4
+      })
+
       // --- fishing gear: bobber flies out on the cast, dunks on a bite; the catch leaps out on the line ---
       rodTip.getWorldPosition(tipWorld)
       const castPhase = fx.active && fishingState.phase === 'cast'
@@ -1583,6 +1649,7 @@ export default function PoriIsland({
       placeHotspot('lighthouse', -1.6, 1.85, -1.4, true)
       placeHotspot('home', 1.45, GROUND_Y + 0.5, -1.35, true)
       placeHotspot('chest', CHEST_SPOT.x, GROUND_Y + 0.2, CHEST_SPOT.z, true)
+      placeHotspot('bottles', bottles[0].outer.position.x, bottles[0].outer.position.y + 0.15, bottles[0].outer.position.z, bottles[0].shown > 0.5)
       placeHotspot('fishing', 4.6, GROUND_Y + 0.25, SPOTS.dock.z, !input.fishing && ['rise', 'flat', 'fall'].includes(state) && input.fish?.length > 0)
       placeHotspot('weather', weather.root.position.x, weather.root.position.y, weather.root.position.z, Number.isFinite(usLevel) && ['rise', 'flat', 'fall'].includes(state))
       boats.forEach((boat) => placeHotspot(boat.key, boat.outer.position.x, boat.outer.position.y + 0.4, boat.outer.position.z, true))

@@ -6,7 +6,7 @@ export const SCENE_TAGS = {
   flow: { label: '수급', scene: '배', icon: '⛵', ready: true },
   leader: { label: '대장주', scene: '고래', icon: '🐋', ready: true },
   stock: { label: '화제 종목', scene: '물고기', icon: '🐟', ready: true },
-  event: { label: '다가오는 일정', scene: '수평선', icon: '🗓️', ready: false },
+  event: { label: '다가오는 일정', scene: '수평선 병편지', icon: '🍾', ready: true },
   other: { label: '그 밖의 소식', scene: null, icon: '📰', ready: false },
 }
 

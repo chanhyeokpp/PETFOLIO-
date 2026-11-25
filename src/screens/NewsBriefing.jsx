@@ -269,7 +269,7 @@ function SampleBriefing({ briefing, marketState, changeRate, characterName }) {
   )
 }
 
-export default function NewsBriefing({ marketState, changeRate, characterName, isLive, flows, drivers, news, briefing, onDone }) {
+export default function NewsBriefing({ marketState, changeRate, characterName, isLive, flows, drivers, news, briefing, nextLetter, onDone }) {
   const sample = DEMO_NEWS[marketState]
   const isLoading = marketState === 'loading' || (isLive && news === undefined)
   const hasLiveNews = isLive && news?.items?.length > 0 && Number.isFinite(changeRate) && marketState !== 'closed'
@@ -310,6 +310,13 @@ export default function NewsBriefing({ marketState, changeRate, characterName, i
         </section>
       )}
 
+      {nextLetter && (
+        <p className="next-letter">
+          <span aria-hidden="true">🍾</span> 수평선에 병편지가 떠 있어요.{' '}
+          <b>{nextLetter.dday === 0 ? '오늘' : nextLetter.dday === 1 ? '내일' : `${nextLetter.dday}일 뒤`} {nextLetter.title}</b>
+          {' '}· 섬에서 병을 눌러 보세요
+        </p>
+      )}
       <button type="button" className="primary-button" onClick={onDone}>{characterName} 보러 가기</button>
     </main>
   )

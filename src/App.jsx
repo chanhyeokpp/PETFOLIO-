@@ -6,6 +6,7 @@ import { SENTIMENTS } from './domain/news'
 import MarketSelect from './screens/MarketSelect'
 import NewsBriefing from './screens/NewsBriefing'
 import ShellChest from './ShellChest'
+import LetterPanel from './LetterPanel'
 import { markShellsSeen, readSeenDay, readShells, readSince, saveShell, saveShells, shellFromBriefing } from './domain/shells'
 import './App.css'
 
@@ -138,6 +139,8 @@ function App() {
   const [shellsSince] = useState(() => readSince(getTodayKst()))
   // 보물상자를 연 순간의 "새로 주운 조개" (열자마자 본 것으로 표시되므로 따로 잡아 둔다)
   const [freshDays, setFreshDays] = useState([])
+  // 수평선 병편지 (다가오는 일정). undefined = 받는 중, null = 못 받음
+  const [letters, setLetters] = useState(undefined)
   // 낚시: null | { phase: 'cast' | 'caught', index, news }
   const [fishing, setFishing] = useState(null)
   const fishingTimer = useRef(null)
@@ -253,6 +256,10 @@ function App() {
         setServerShells(list)
         if (list?.length) saveShells(list)
       })
+    fetch('/api/letters')
+      .then((response) => (response.ok ? response.json() : null))
+      .catch(() => null)
+      .then((data) => { if (!cancelled) setLetters(data ?? null) })
     return () => { cancelled = true }
   }, [])
 
@@ -329,6 +336,8 @@ function App() {
   const getFocus = () => {
     if (fishing) return 'fishing'
     if (picked === 'chest') return 'chest'
+    // 병편지를 보는 동안엔 선착장에서 수평선을 바라본다
+    if (picked === 'bottles') return 'dock'
     if (marketState === 'closed') return 'home'
     if (isUnavailable) return 'lighthouse'
     const allLive = dataMode === 'live' && causeMode === 'live' && flowMode === 'live'
@@ -482,6 +491,7 @@ function App() {
           drivers={drivers}
           news={news}
           briefing={briefing}
+          nextLetter={letters?.upcoming?.[0] ?? null}
           onDone={finishNews}
         />
       )}
@@ -587,6 +597,7 @@ function App() {
                 } : null}
                 onFishingCaught={() => hookFish()}
                 foggy={isFoggy}
+                letters={letters?.upcoming?.filter((letter) => letter.dday <= 10).slice(0, 3).map((letter) => ({ dday: letter.dday })) ?? null}
               />
             ) : (
             <Pori3D marketState={marketState} touchSignal={reactionTick} waterLevel={tradingActivity} volatility={volatility}
@@ -650,6 +661,8 @@ function App() {
               <p className="fishing-disclaimer">오늘 화제였을 뿐, 사라는 뜻이 아니에요. 화제 종목은 평소보다 크게 출렁이기 쉬워요.</p>
               <button type="button" className="fishing-again" onClick={startFishing}>🎣 한 번 더 낚기</button>
             </aside>
+          ) : picked === 'bottles' ? (
+            <LetterPanel letters={letters} onClose={() => setPicked(null)} />
           ) : picked === 'chest' ? (
             <ShellChest shells={shells} freshDays={freshDays} onClose={() => setPicked(null)} />
           ) : pickedInfo ? (
