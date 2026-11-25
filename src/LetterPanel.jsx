@@ -20,11 +20,11 @@ function Letter({ letter, open, onToggle }) {
       </button>
       {open && (
         <div className="letter-body">
-          <p className="letter-when">{letter.timeNote}</p>
-          <p><b>무엇을 알게 되나요?</b> {letter.watch}</p>
+          <p className="letter-watch">{letter.watch} <small>{letter.timeNote}</small></p>
           {letter.expectation && (
             <p className="letter-expect">
-              <b>이번엔</b> {letter.expectation.text}
+              <b>이번엔</b>
+              <span>{letter.expectation.text}{letter.expectation.figure && <em>{letter.expectation.figure}</em>}</span>
               <small>
                 {letter.expectation.sources.map((source, index) => (
                   <span key={source.link}>
@@ -36,21 +36,17 @@ function Letter({ letter, open, onToggle }) {
             </p>
           )}
           <div className="letter-branches">
-            {letter.branches.map((branch) => (
-              <div key={branch.when}>
-                <b>{branch.when}</b>
+            {letter.branches.map((branch, index) => (
+              <div key={branch.when} className={index === 0 ? 'low' : 'high'}>
+                <b><i aria-hidden="true">{index === 0 ? '▼' : '▲'}</i>{branch.when}</b>
                 <p>{branch.then}</p>
               </div>
             ))}
           </div>
-          <p className="letter-places">
-            섬에서 볼 곳:{' '}
-            {letter.island.map((key) => placeOf(key)).filter(Boolean).map((place) => (
-              <span key={place.key}>{place.icon} {place.label}</span>
-            ))}
+          <p className="letter-foot">
+            섬에서 볼 곳: {letter.island.map((key) => placeOf(key)?.label).filter(Boolean).join(' · ')} · {letter.note}{' '}
+            <a href={letter.source.url} target="_blank" rel="noopener noreferrer">일정 출처</a>
           </p>
-          <p className="letter-note">{letter.note}</p>
-          <a className="letter-source" href={letter.source.url} target="_blank" rel="noopener noreferrer">일정 출처: {letter.source.name}</a>
         </div>
       )}
     </li>
@@ -70,13 +66,11 @@ function Reply({ letter }) {
       </div>
       {letter.reply ? (
         <p className="letter-reply">
-          {formatDate(letter.reply.day)} 코스피 <em className={letter.reply.changeRate < 0 ? 'down' : 'up'}>{signed(letter.reply.changeRate)}</em>, 그날의 범인은 <b>{letter.reply.title}</b>.{' '}
-          {related
-            ? '편지에 적힌 곳에서 범인이 나왔어요.'
-            : '그날 바다를 흔든 건 다른 곳이었어요. 일정이 있다고 꼭 그날의 범인이 되는 건 아니에요.'}
+          {formatDate(letter.reply.day)} 코스피 <em className={letter.reply.changeRate < 0 ? 'down' : 'up'}>{signed(letter.reply.changeRate)}</em> · 범인: <b>{letter.reply.title}</b>
+          <span className={`reply-tag ${related ? 'hit' : ''}`}>{related ? '편지에 적힌 곳에서 나왔어요' : '다른 곳에서 나왔어요'}</span>
         </p>
       ) : (
-        <p className="letter-reply">답장은 장이 열리고 그날 기록이 쌓이면 와요.</p>
+        <p className="letter-reply">장이 열리면 답장이 와요.</p>
       )}
     </li>
   )
@@ -86,7 +80,9 @@ function Reply({ letter }) {
 export default function LetterPanel({ letters, onClose }) {
   const upcoming = letters?.upcoming ?? []
   const past = letters?.past ?? []
-  const [openId, setOpenId] = useState(upcoming[0]?.id ?? null)
+  // undefined = 아직 아무것도 안 고름 → 가장 가까운 편지를 펼쳐 둔다 (편지가 늦게 와도)
+  const [chosenId, setOpenId] = useState(undefined)
+  const openId = chosenId === undefined ? upcoming[0]?.id ?? null : chosenId
   return (
     <aside className="shell-chest letter-panel" aria-label="수평선 병편지">
       <header>
@@ -94,7 +90,7 @@ export default function LetterPanel({ letters, onClose }) {
         <span>{upcoming.length}통</span>
         <button type="button" onClick={onClose} aria-label="병편지 닫기">✕</button>
       </header>
-      <p className="shell-note">시장이 기다리는 일정이 수평선에서 떠내려와요. 무엇이 오를지 맞히는 게 아니라, 그날 무엇을 보게 되는지 미리 알려 드려요.</p>
+      <p className="shell-note">무엇이 오를지가 아니라, 그날 무엇을 보게 되는지 알려 드려요.</p>
       {letters === undefined && <p className="shell-note">포리가 편지를 건져 오는 중이에요…</p>}
       {letters === null && <p className="shell-note">편지를 가져오지 못했어요.</p>}
       {upcoming.length > 0 && (
@@ -102,7 +98,7 @@ export default function LetterPanel({ letters, onClose }) {
           {upcoming.map((letter) => (
             <Letter
               key={letter.id} letter={letter} open={openId === letter.id}
-              onToggle={() => setOpenId((current) => (current === letter.id ? null : letter.id))}
+              onToggle={() => setOpenId(openId === letter.id ? null : letter.id)}
             />
           ))}
         </ol>

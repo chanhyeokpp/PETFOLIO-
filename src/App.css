@@ -802,3 +802,27 @@ body:has(.full-scene) { overflow-x: clip; }
   .teaser-open { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .teaser-wave, .teaser-bottle { animation: none; } }
+
+/* 병편지: 짧게 */
+.letter-body .letter-watch { color: #26323a; font-size: 13.5px; font-weight: 700; }
+.letter-body .letter-watch small { margin-left: 4px; color: #8a959c; font-size: 11.5px; font-weight: 600; }
+.letter-expect { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 10px; background: #f2f8ff; border-radius: 10px; }
+.letter-body .letter-expect b { padding: 2px 8px; color: #fff; background: #3f72c2; border-radius: 999px; font-size: 11px; }
+.letter-expect span { color: #26323a; font-size: 13px; font-weight: 700; }
+.letter-expect em { margin-left: 6px; padding: 1px 7px; color: #2f5fa8; background: #fff; border-radius: 6px; font-size: 12px; font-style: normal; font-weight: 800; }
+.letter-expect small { margin-left: auto; color: #8a959c; font-size: 11px; }
+.letter-branches { grid-template-columns: 1fr 1fr; gap: 8px; }
+.letter-branches div { padding: 9px 10px; border-left: 0; border-radius: 12px; }
+.letter-branches div.low { background: #eef4fd; }
+.letter-branches div.high { background: #fff1ec; }
+.letter-branches div + div { border-left-color: transparent; }
+.letter-branches b { display: flex; align-items: center; gap: 5px; font-size: 12px; }
+.letter-branches b i { font-size: 10px; font-style: normal; }
+.letter-branches .low b i { color: #3f72c2; }
+.letter-branches .high b i { color: #d0644f; }
+.letter-body .letter-branches p { margin-top: 3px; font-size: 12.5px; line-height: 1.45; }
+.letter-body .letter-foot { color: #8a959c; font-size: 11.5px; line-height: 1.5; }
+.letter-foot a { color: #6b7279; }
+.letter-reply { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.reply-tag { padding: 2px 8px; color: #6b7279; background: #eef1f4; border-radius: 999px; font-size: 11px; font-weight: 800; }
+.reply-tag.hit { color: #1f6d59; background: #dff7ef; }
