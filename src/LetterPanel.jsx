@@ -13,12 +13,15 @@ function Letter({ letter, open, onToggle }) {
   return (
     <li className={`letter ${open ? 'open' : ''}`}>
       <button type="button" className="letter-head" onClick={onToggle} aria-expanded={open}>
-        <b className={letter.dday <= 1 ? 'soon' : ''}>{ddayLabel(letter.dday)}</b>
-        <span>{letter.title}</span>
-        <small>{formatDate(letter.kstDate)}</small>
+        <span className="letter-capsule">{letter.title}</span>
+        <span className="letter-when">
+          <b className={letter.dday <= 1 ? 'soon' : ''}>{ddayLabel(letter.dday)}</b>
+          <small>{formatDate(letter.kstDate)}</small>
+        </span>
       </button>
       {open && (
         <div className="letter-body">
+          {/* 제목이 무엇인지 풀어 주는 말풍선: 꼬리가 캡슐을 가리킨다 */}
           <p className="letter-watch">{letter.watch}</p>
           {letter.expectation && (
             <p className="letter-expect">
